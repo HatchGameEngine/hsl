@@ -1,0 +1,3825 @@
+#include <HSL/Bytecode.h>
+#include <HSL/ScriptManager.h>
+#include <HSL/Value.h>
+#include <HSL/ValuePrinter.h>
+#include <HSL/VMThread.h>
+#include <Diagnostics/Log.h>
+#include <Utilities/Clock.h>
+#include <Utilities/StringUtils.h>
+
+#include <Main.h>
+
+#ifdef HSL_LIBRARY
+#include <HSL/API.h>
+#endif
+
+#ifdef VM_DEBUG
+#include <HSL/VMThreadDebugger.h>
+#endif
+
+#ifndef _MSC_VER
+#define USING_VM_DISPATCH_TABLE
+#endif
+
+// Locks are only in 3 places:
+// Heap, which contains object memory and globals
+// Bytecode area, which contains function bytecode
+// Tokens & Strings
+
+// #region Error Handling & Debug Info
+std::string VMThread::GetFunctionName(ObjFunction* function) {
+	if (function->Index == 0) {
+		return "top-level function";
+	}
+	else if (strcmp(function->Name, "<anonymous-fn>") == 0) {
+		return std::string(function->Name);
+	}
+
+	if (function->Class) {
+		return "method " + std::string(function->Class->Name) +
+			"::" + std::string(function->Name);
+	}
+
+	return "function " + std::string(function->Name);
+}
+
+char* VMThread::GetToken(Uint32 hash) {
+	static char GetTokenBuffer[256];
+
+	if (Manager->Tokens && Manager->Tokens->Exists(hash)) {
+		return Manager->Tokens->Get(hash);
+	}
+
+	snprintf(GetTokenBuffer, 15, "%X", hash);
+	return GetTokenBuffer;
+}
+char* VMThread::GetVariableOrMethodName(Uint32 hash) {
+	static char GetTokenBuffer[256];
+
+	if (Manager->Tokens && Manager->Tokens->Exists(hash)) {
+		char* hashStr = Manager->Tokens->Get(hash);
+		snprintf(GetTokenBuffer, sizeof GetTokenBuffer, "\"%s\"", hashStr);
+	}
+	else {
+		snprintf(GetTokenBuffer, sizeof GetTokenBuffer, "$[%08X]", hash);
+	}
+
+	return GetTokenBuffer;
+}
+void VMThread::PrintCallTraceFrame(CallFrame* frame, PrintBuffer* buffer, const char* errorString) {
+	ObjFunction* function = frame->Function;
+	if (function && function->Chunk.Lines) {
+		size_t bpos = (frame->IPLast - frame->IPStart);
+		int line = function->Chunk.Lines[bpos] & 0xFFFF;
+
+		std::string functionName = GetFunctionName(function);
+		buffer_printf(buffer,
+			"In %s of %s, line %d",
+			functionName.c_str(),
+			GetModuleName(function->Module),
+			line);
+
+		if (errorString) {
+			buffer_printf(buffer, ":\n\n    %s\n", errorString);
+		}
+		else {
+			buffer_printf(buffer, ".\n");
+		}
+	}
+	else if (errorString) {
+		buffer_printf(buffer, "%s\n", errorString);
+	}
+}
+void VMThread::PrintStackTrace(PrintBuffer* buffer) {
+	buffer_printf(buffer, "Call Trace (Thread %d):\n", ID);
+
+	for (Uint32 i = 0; i < FrameCount; i++) {
+		CallFrame* frame = &Frames[i];
+		ObjFunction* function = frame->Function;
+		int line = -1;
+
+		const char* source = GetModuleName(function->Module);
+		if (i > 0 && function->Chunk.Lines && strcmp(source, "repl") != 0) {
+			CallFrame* fr2 = &Frames[i - 1];
+			line = fr2->Function->Chunk.Lines[fr2->IPLast - fr2->IPStart] & 0xFFFF;
+		}
+
+		std::string functionName = GetFunctionName(function);
+		buffer_printf(buffer, "    called %s of %s", functionName.c_str(), source);
+
+		if (line > 0) {
+			buffer_printf(buffer, " on line %d", line);
+		}
+		if (i < FrameCount - 1) {
+			buffer_printf(buffer, ", then");
+		}
+		buffer_printf(buffer, "\n");
+	}
+}
+void VMThread::PrintFunctionArgs(CallFrame* frame, PrintBuffer* buffer) {
+	ObjFunction* function = frame->Function;
+
+	// That's top level code; there's no parameters
+	if (function->Index == 0) {
+		return;
+	}
+
+	size_t maxLocals = std::min(function->Chunk.Locals->size(), (size_t)function->Arity + 1);
+
+	buffer_printf(buffer, " (");
+
+	for (size_t i = 0; i < maxLocals; i++) {
+		buffer_printf(buffer, "%s=", (*function->Chunk.Locals)[i].Name);
+
+		if (i < StackTop - frame->Slots) {
+			VMValue value = frame->Slots[i];
+			if (IS_STRING(value)) {
+				buffer_printf(buffer, "\"");
+			}
+			ValuePrinter::Print(buffer, value);
+			if (IS_STRING(value)) {
+				buffer_printf(buffer, "\"");
+			}
+		}
+
+		if (i < maxLocals - 1) {
+			buffer_printf(buffer, ", ");
+		}
+	}
+
+	buffer_printf(buffer, ")");
+}
+void VMThread::MakeErrorMessage(PrintBuffer* buffer, const char* errorString) {
+	if (FrameCount > 0) {
+		PrintCallTraceFrame(&Frames[FrameCount - 1], buffer, errorString);
+		buffer_printf(buffer, "\n");
+		PrintStackTrace(buffer);
+	}
+	else if (IS_OBJECT(FunctionToInvoke)) {
+		if (IS_NATIVE_FUNCTION(FunctionToInvoke) || IS_API_NATIVE_FUNCTION(FunctionToInvoke)) {
+			buffer_printf(
+				buffer, "While calling native function:\n\n    %s\n", errorString);
+		}
+		else {
+			ObjFunction* function = NULL;
+
+			if (OBJECT_TYPE(FunctionToInvoke) == OBJ_BOUND_METHOD) {
+				ObjBoundMethod* bound = AS_BOUND_METHOD(FunctionToInvoke);
+				function = bound->Method;
+			}
+			else if (OBJECT_TYPE(FunctionToInvoke) == OBJ_FUNCTION) {
+				function = AS_FUNCTION(FunctionToInvoke);
+			}
+
+			if (function) {
+				std::string functionName = GetFunctionName(function);
+				buffer_printf(buffer,
+					"While calling %s of %s",
+					functionName.c_str(),
+					GetModuleName(function->Module));
+			}
+			else {
+				buffer_printf(buffer, "While calling value");
+			}
+		}
+
+		if (errorString) {
+			buffer_printf(buffer, ":\n\n    %s\n", errorString);
+		}
+		else {
+			buffer_printf(buffer, ".\n");
+		}
+	}
+	else if (errorString) {
+		buffer_printf(buffer, "%s\n", errorString);
+	}
+	else {
+		buffer_printf(buffer, "Something went wrong in a script.");
+	}
+}
+int VMThread::ThrowRuntimeError(bool fatal, const char* errorMessage, ...) {
+	int errResult = ERROR_RES_EXIT;
+
+	bool showMessageBox = true;
+	if (InstructionIgnoreMap[000000000]) {
+		showMessageBox = false;
+	}
+
+	va_list args;
+	char errorString[2048];
+	va_start(args, errorMessage);
+	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
+	va_end(args);
+	char* textBuffer = (char*)malloc(512);
+	PrintBuffer buffer;
+	buffer.Buffer = &textBuffer;
+	buffer.WriteIndex = 0;
+	buffer.BufferSize = 512;
+
+	MakeErrorMessage(&buffer, errorString);
+
+#ifndef HSL_LIBRARY
+	Log::Print(Log::LOG_ERROR, textBuffer);
+
+	if (InREPL()) {
+		free(textBuffer);
+		return ERROR_RES_CONTINUE;
+	}
+
+	PrintStack();
+#endif
+
+#ifdef HSL_LIBRARY
+	hsl_ErrorResponse result = HandleVMRuntimeError(Manager, fatal ? HSL_FATAL_ERROR : HSL_RUNTIME_ERROR, std::string(textBuffer));
+	if (result == HSL_ERROR_RES_CONTINUE) {
+		errResult = ERROR_RES_CONTINUE;
+	}
+#else
+	StandaloneExit(std::string(textBuffer));
+#endif
+	free(textBuffer);
+	return errResult;
+}
+int VMThread::ShowErrorFromScript(const char* errorString, bool detailed) {
+	int errResult = ERROR_RES_EXIT;
+
+	char* textBuffer = (char*)malloc(512);
+	PrintBuffer buffer;
+	buffer.Buffer = &textBuffer;
+	buffer.WriteIndex = 0;
+	buffer.BufferSize = 512;
+
+	if (detailed) {
+		MakeErrorMessage(&buffer, errorString);
+	}
+	else {
+		buffer_printf(&buffer, "%s", errorString);
+	}
+
+#ifndef HSL_LIBRARY
+	Log::Print(Log::LOG_ERROR, textBuffer);
+
+	if (InREPL()) {
+		free(textBuffer);
+		return ERROR_RES_CONTINUE;
+	}
+#endif
+
+#ifdef HSL_LIBRARY
+	hsl_ErrorResponse result = HandleVMRuntimeError(Manager, HSL_SCRIPT_ERROR, std::string(textBuffer));
+	if (result == HSL_ERROR_RES_CONTINUE) {
+		errResult = ERROR_RES_CONTINUE;
+	}
+#else
+	StandaloneExit(std::string(textBuffer));
+#endif
+	free(textBuffer);
+	return errResult;
+}
+void VMThread::ShowErrorLocation(const char* errorMessage) {
+	char* textBuffer = (char*)malloc(512);
+	PrintBuffer buffer;
+	buffer.Buffer = &textBuffer;
+	buffer.WriteIndex = 0;
+	buffer.BufferSize = 512;
+
+	MakeErrorMessage(&buffer, errorMessage);
+
+	Log::Print(Log::LOG_ERROR, textBuffer);
+
+	free(textBuffer);
+
+	PrintStack();
+}
+void VMThread::ShowErrorLocation() {
+	ShowErrorLocation(nullptr);
+}
+void VMThread::PrintStack() {
+	int i = 0;
+	printf("Stack:\n");
+	for (VMValue* v = StackTop - 1; v >= Stack; v--) {
+		printf("%4d '", i);
+		ValuePrinter::Print(*v);
+		printf("'\n");
+		i--;
+	}
+}
+void VMThread::ReturnFromNative() throw() {}
+// #endregion
+
+// #region Debugging
+#ifdef VM_DEBUG
+void VMThread::Breakpoint(VMThreadBreakpoint* breakpoint) {
+	CallFrame* frame = &Frames[FrameCount - 1];
+	ObjFunction* function = frame->Function;
+
+	VMThreadDebugger* debugger = new VMThreadDebugger(this);
+
+	printf("Breakpoint hit");
+
+	if (function) {
+		printf(" at ");
+		debugger->PrintCallFrameSourceLine(frame, breakpoint->CodeOffset, true);
+	}
+	else {
+		printf("\n");
+	}
+
+	switch (breakpoint->OnHit) {
+	case BREAKPOINT_ONHIT_DISABLE:
+		breakpoint->Enabled = false;
+		break;
+	case BREAKPOINT_ONHIT_REMOVE:
+		RemoveBreakpoint(breakpoint->Index);
+		printf("Removed breakpoint %d\n", breakpoint->Index);
+		break;
+	default:
+		break;
+	}
+
+	debugger->Enter();
+	debugger->MainLoop();
+	debugger->Exit();
+
+	printf("Resuming execution.\n");
+
+	delete debugger;
+}
+bool VMThread::ShowBranchLimitMessage(const char* errorMessage, ...) {
+	bool errResult = true;
+
+	va_list args;
+	char errorString[2048];
+	va_start(args, errorMessage);
+	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
+	va_end(args);
+
+	char* textBuffer = (char*)malloc(512);
+	PrintBuffer buffer;
+	buffer.Buffer = &textBuffer;
+	buffer.WriteIndex = 0;
+	buffer.BufferSize = 512;
+
+	MakeErrorMessage(&buffer, errorString);
+
+#ifndef HSL_LIBRARY
+	Log::Print(Log::LOG_WARN, textBuffer);
+
+	if (InREPL()) {
+		free(textBuffer);
+		return true;
+	}
+
+	PrintStack();
+#endif
+
+	if (InstructionIgnoreMap[000000001]) {
+		free(textBuffer);
+		return false;
+	}
+
+#ifdef HSL_LIBRARY
+	hsl_ErrorResponse result = HandleVMRuntimeError(Manager, HSL_HIT_BRANCH_LIMIT, std::string(textBuffer));
+	if (result == HSL_ERROR_RES_EXIT) {
+		errResult = false;
+	}
+#else
+	StandaloneExit(std::string(textBuffer));
+#endif
+	free(textBuffer);
+
+	return errResult;
+}
+bool VMThread::CheckBranchLimit(CallFrame* frame) {
+	if (BranchLimit && ++frame->BranchCount >= BranchLimit) {
+		return ShowBranchLimitMessage("Hit branch limit!");
+	}
+	return true;
+}
+VMThreadBreakpoint* VMThread::AddBreakpoint(ObjFunction* function, Uint32 position, int type) {
+	Uint8* breakpoints = BreakpointsPerFunction[function];
+	if (breakpoints[position]) {
+		return nullptr;
+	}
+
+	VMThreadBreakpoint* bp = new VMThreadBreakpoint;
+	bp->Function = function;
+	bp->CodeOffset = position;
+	bp->Enabled = true;
+	bp->OnHit = type;
+	bp->Index = CurrentBreakpointIndex++;
+
+	breakpoints[position] = 1;
+
+	Breakpoints.push_back(bp);
+
+	return bp;
+}
+VMThreadBreakpoint* VMThread::GetBreakpoint(int index) {
+	for (size_t i = 0; i < Breakpoints.size(); i++) {
+		VMThreadBreakpoint* breakpoint = Breakpoints[i];
+		if (breakpoint->Index == index) {
+			return breakpoint;
+		}
+	}
+
+	return nullptr;
+}
+VMThreadBreakpoint* VMThread::FindBreakpoint(ObjFunction* function, Uint32 position) {
+	for (size_t i = 0; i < Breakpoints.size(); i++) {
+		VMThreadBreakpoint* breakpoint = Breakpoints[i];
+
+		if (breakpoint->Function == function && breakpoint->CodeOffset == position) {
+			return breakpoint;
+		}
+	}
+
+	return nullptr;
+}
+bool VMThread::RemoveBreakpoint(int index) {
+	for (size_t i = 0; i < Breakpoints.size(); i++) {
+		VMThreadBreakpoint* breakpoint = Breakpoints[i];
+
+		if (breakpoint->Index == index) {
+			Uint8* bp = BreakpointsPerFunction[breakpoint->Function];
+			bp[breakpoint->CodeOffset] = 0;
+
+			delete breakpoint;
+
+			Breakpoints.erase(Breakpoints.begin() + i);
+			return true;
+		}
+	}
+
+	return false;
+}
+void VMThread::AddFunctionBreakpoints(ObjFunction* function) {
+	Chunk* chunk = &function->Chunk;
+
+	Uint8* breakpoints = (Uint8*)Memory::Calloc(chunk->Count, sizeof(Uint8));
+
+	BreakpointsPerFunction[function] = breakpoints;
+
+	if (!chunk->BreakpointCount) {
+		return;
+	}
+
+	for (Uint16 i = 0; i < chunk->BreakpointCount; i++) {
+		AddBreakpoint(function, chunk->Breakpoints[i], BREAKPOINT_ONHIT_KEEP);
+	}
+}
+void VMThread::RemoveBreakpointsForFunction(ObjFunction* function) {
+	auto it = BreakpointsPerFunction.find(function);
+	if (it != BreakpointsPerFunction.end()) {
+		Memory::Free(it->second);
+		BreakpointsPerFunction.erase(function);
+	}
+
+	for (size_t i = 0; i < Breakpoints.size();) {
+		VMThreadBreakpoint* breakpoint = Breakpoints[i];
+
+		if (breakpoint->Function == function) {
+			delete breakpoint;
+
+			Breakpoints.erase(Breakpoints.begin() + i);
+		}
+		else {
+			i++;
+		}
+	}
+}
+void VMThread::RemoveBreakpointsForModule(ObjModule* module) {
+	for (size_t i = 0; i < module->Functions->size(); i++) {
+		ObjFunction* function = (*module->Functions)[i];
+
+		RemoveBreakpointsForFunction(function);
+	}
+}
+void VMThread::DisposeBreakpoints() {
+	for (size_t i = 0; i < Breakpoints.size(); i++) {
+		delete Breakpoints[i];
+	}
+	Breakpoints.clear();
+
+	std::unordered_map<ObjFunction*, Uint8*>::iterator it;
+	for (it = BreakpointsPerFunction.begin(); it != BreakpointsPerFunction.end(); it++) {
+		Memory::Free(it->second);
+	}
+	BreakpointsPerFunction.clear();
+}
+#endif
+// #endregion
+
+// #region Stack stuff
+void VMThread::Push(VMValue value) {
+	if (StackSize() == STACK_SIZE_MAX) {
+		if (ThrowRuntimeError(true,
+			    "Stack overflow! \nStack Top: %p \nStack: %p\nCount: %d",
+			    StackTop,
+			    Stack,
+			    StackSize()) == ERROR_RES_CONTINUE) {
+			return;
+		}
+	}
+
+	*(StackTop++) = value;
+}
+VMValue VMThread::Pop() {
+	if (StackTop == Stack) {
+		if (ThrowRuntimeError(true, "Stack underflow!") == ERROR_RES_CONTINUE) {
+			return *StackTop;
+		}
+	}
+
+	StackTop--;
+	return *StackTop;
+}
+void VMThread::Pop(unsigned amount) {
+	while (amount-- > 0) {
+		Pop();
+	}
+}
+VMValue VMThread::Peek(int offset) {
+	return *(StackTop - offset - 1);
+}
+Uint32 VMThread::StackSize() {
+	return (Uint32)(StackTop - Stack);
+}
+void VMThread::ResetStack() {
+	StackTop = Stack;
+}
+// #endregion
+
+// #region Instruction stuff
+// NOTE: These should be inlined
+Uint8 VMThread::ReadByte(CallFrame* frame) {
+	frame->IP += sizeof(Uint8);
+	return *(Uint8*)(frame->IP - sizeof(Uint8));
+}
+Uint16 VMThread::ReadUInt16(CallFrame* frame) {
+	frame->IP += sizeof(Uint16);
+	return FROM_LE16(*(Uint16*)(frame->IP - sizeof(Uint16)));
+}
+Uint32 VMThread::ReadUInt32(CallFrame* frame) {
+	frame->IP += sizeof(Uint32);
+	return FROM_LE32(*(Uint32*)(frame->IP - sizeof(Uint32)));
+}
+Sint16 VMThread::ReadSInt16(CallFrame* frame) {
+	return (Sint16)ReadUInt16(frame);
+}
+Sint32 VMThread::ReadSInt32(CallFrame* frame) {
+	return (Sint32)ReadUInt32(frame);
+}
+float VMThread::ReadFloat(CallFrame* frame) {
+	frame->IP += sizeof(float);
+	return FROM_LE32F(*(float*)(frame->IP - sizeof(float)));
+}
+VMValue VMThread::ReadConstant(CallFrame* frame) {
+	return GetConstant(&frame->Function->Chunk, ReadUInt32(frame));
+}
+VMValue VMThread::GetConstant(Chunk* chunk, Uint32 index) {
+	return (*chunk->Constants)[index];
+}
+
+#define DO_RETURN() \
+	{ \
+		FrameCount--; \
+		if (FrameCount == ReturnFrame) { \
+			return INTERPRET_FINISHED; \
+		} \
+		StackTop = frame->Slots; \
+		Push(InterpretResult); \
+		frame = &Frames[FrameCount - 1]; \
+	}
+
+#if USING_VM_FUNCPTRS
+#define IP_OPFUNC_SYNC() \
+	frame->OpcodeFunctions = \
+		frame->OpcodeFStart + frame->IPToOpcode[frame->IP - frame->IPStart];
+#else
+#define IP_OPFUNC_SYNC()
+#endif
+
+#ifdef VM_DEBUG
+bool VMThread::DoJump(CallFrame* frame, int offset) {
+	frame->IP += offset;
+#if USING_VM_FUNCPTRS
+	IP_OPFUNC_SYNC();
+#endif
+	return CheckBranchLimit(frame);
+}
+bool VMThread::DoJumpBack(CallFrame* frame, int offset) {
+	frame->IP -= offset;
+#if USING_VM_FUNCPTRS
+	IP_OPFUNC_SYNC();
+#endif
+	return CheckBranchLimit(frame);
+}
+
+#define JUMP(offset) \
+	{ \
+		if (DoJump(frame, offset) == false) { \
+			InterpretResult = NULL_VAL; \
+			DO_RETURN(); \
+			VM_BREAK; \
+		} \
+	}
+
+#define JUMP_BACK(offset) \
+	{ \
+		if (DoJumpBack(frame, offset) == false) { \
+			InterpretResult = NULL_VAL; \
+			DO_RETURN(); \
+			VM_BREAK; \
+		} \
+	}
+#elif USING_VM_FUNCPTRS
+#define JUMP(offset) \
+	{ \
+		frame->IP += offset; \
+		IP_OPFUNC_SYNC(); \
+	}
+#define JUMP_BACK(offset) \
+	{ \
+		frame->IP -= offset; \
+		IP_OPFUNC_SYNC(); \
+	}
+#else
+#define JUMP(offset) \
+	{ frame->IP += offset; }
+#define JUMP_BACK(offset) \
+	{ frame->IP -= offset; }
+#endif
+
+int VMThread::RunInstruction() {
+#if USING_VM_FUNCPTRS
+#define VM_START(ins) \
+	return RunOpcodeFunc(frame); \
+	}
+#define VM_END() \
+	int VMThread::RunOpcodeFunc(CallFrame* frame) { \
+		frame->IP++; \
+		OpcodeFunc func = (*frame->OpcodeFunctions++); \
+		int result = (this->*func)(frame);
+#define VM_CASE(n) int VMThread::OPFUNC_##n(CallFrame* frame)
+#define VM_BREAK return INTERPRET_OK
+#elif defined(USING_VM_DISPATCH_TABLE)
+// NOTE: MSVC cannot take advantage of the dispatch table.
+#define VM_ADD_DISPATCH(op) &&START_##op
+#define VM_ADD_DISPATCH_NULL(op) NULL
+	// This must follow the existing opcode order.
+	static const void* dispatch_table[] = {
+		VM_ADD_DISPATCH_NULL(OP_NOP),
+		VM_ADD_DISPATCH(OP_CONSTANT),
+		VM_ADD_DISPATCH(OP_DEFINE_GLOBAL),
+		VM_ADD_DISPATCH(OP_GET_PROPERTY),
+		VM_ADD_DISPATCH(OP_SET_PROPERTY),
+		VM_ADD_DISPATCH(OP_GET_GLOBAL),
+		VM_ADD_DISPATCH(OP_SET_GLOBAL),
+		VM_ADD_DISPATCH(OP_GET_LOCAL),
+		VM_ADD_DISPATCH(OP_SET_LOCAL),
+		VM_ADD_DISPATCH(OP_PRINT_STACK),
+		VM_ADD_DISPATCH(OP_INHERIT),
+		VM_ADD_DISPATCH(OP_RETURN),
+		VM_ADD_DISPATCH(OP_METHOD_V4),
+		VM_ADD_DISPATCH(OP_CLASS),
+		VM_ADD_DISPATCH(OP_CALL),
+		VM_ADD_DISPATCH_NULL(OP_UNUSED_1),
+		VM_ADD_DISPATCH(OP_INVOKE),
+		VM_ADD_DISPATCH(OP_JUMP),
+		VM_ADD_DISPATCH(OP_JUMP_IF_FALSE),
+		VM_ADD_DISPATCH(OP_JUMP_BACK),
+		VM_ADD_DISPATCH(OP_POP),
+		VM_ADD_DISPATCH(OP_COPY),
+		VM_ADD_DISPATCH(OP_ADD),
+		VM_ADD_DISPATCH(OP_SUBTRACT),
+		VM_ADD_DISPATCH(OP_MULTIPLY),
+		VM_ADD_DISPATCH(OP_DIVIDE),
+		VM_ADD_DISPATCH(OP_MODULO),
+		VM_ADD_DISPATCH(OP_NEGATE),
+		VM_ADD_DISPATCH(OP_INCREMENT),
+		VM_ADD_DISPATCH(OP_DECREMENT),
+		VM_ADD_DISPATCH(OP_BITSHIFT_LEFT),
+		VM_ADD_DISPATCH(OP_BITSHIFT_RIGHT),
+		VM_ADD_DISPATCH(OP_NULL),
+		VM_ADD_DISPATCH(OP_TRUE),
+		VM_ADD_DISPATCH(OP_FALSE),
+		VM_ADD_DISPATCH(OP_BW_NOT),
+		VM_ADD_DISPATCH(OP_BW_AND),
+		VM_ADD_DISPATCH(OP_BW_OR),
+		VM_ADD_DISPATCH(OP_BW_XOR),
+		VM_ADD_DISPATCH(OP_LG_NOT),
+		VM_ADD_DISPATCH(OP_LG_AND),
+		VM_ADD_DISPATCH(OP_LG_OR),
+		VM_ADD_DISPATCH(OP_EQUAL),
+		VM_ADD_DISPATCH(OP_EQUAL_NOT),
+		VM_ADD_DISPATCH(OP_GREATER),
+		VM_ADD_DISPATCH(OP_GREATER_EQUAL),
+		VM_ADD_DISPATCH(OP_LESS),
+		VM_ADD_DISPATCH(OP_LESS_EQUAL),
+		VM_ADD_DISPATCH(OP_PRINT),
+		VM_ADD_DISPATCH(OP_ENUM_NEXT),
+		VM_ADD_DISPATCH(OP_SAVE_VALUE),
+		VM_ADD_DISPATCH(OP_LOAD_VALUE),
+		VM_ADD_DISPATCH(OP_WITH),
+		VM_ADD_DISPATCH(OP_GET_ELEMENT),
+		VM_ADD_DISPATCH(OP_SET_ELEMENT),
+		VM_ADD_DISPATCH(OP_NEW_ARRAY),
+		VM_ADD_DISPATCH(OP_NEW_MAP),
+		VM_ADD_DISPATCH(OP_SWITCH_TABLE),
+		VM_ADD_DISPATCH_NULL(OP_UNUSED_2),
+		VM_ADD_DISPATCH(OP_EVENT_V4),
+		VM_ADD_DISPATCH(OP_TYPEOF),
+		VM_ADD_DISPATCH(OP_NEW),
+		VM_ADD_DISPATCH(OP_IMPORT),
+		VM_ADD_DISPATCH(OP_SWITCH),
+		VM_ADD_DISPATCH(OP_POPN),
+		VM_ADD_DISPATCH(OP_HAS_PROPERTY),
+		VM_ADD_DISPATCH(OP_IMPORT_MODULE),
+		VM_ADD_DISPATCH(OP_ADD_ENUM),
+		VM_ADD_DISPATCH(OP_NEW_ENUM),
+		VM_ADD_DISPATCH(OP_GET_SUPERCLASS),
+		VM_ADD_DISPATCH(OP_GET_MODULE_LOCAL),
+		VM_ADD_DISPATCH(OP_SET_MODULE_LOCAL),
+		VM_ADD_DISPATCH(OP_DEFINE_MODULE_LOCAL),
+		VM_ADD_DISPATCH(OP_USE_NAMESPACE),
+		VM_ADD_DISPATCH(OP_DEFINE_CONSTANT),
+		VM_ADD_DISPATCH(OP_INTEGER),
+		VM_ADD_DISPATCH(OP_DECIMAL),
+		VM_ADD_DISPATCH(OP_INVOKE),
+		VM_ADD_DISPATCH(OP_SUPER_INVOKE),
+		VM_ADD_DISPATCH(OP_EVENT),
+		VM_ADD_DISPATCH(OP_METHOD),
+		VM_ADD_DISPATCH(OP_NEW_HITBOX),
+		VM_ADD_DISPATCH(OP_LOCATION_STACK),
+		VM_ADD_DISPATCH(OP_LOCATION_MODULE_LOCAL),
+		VM_ADD_DISPATCH(OP_LOCATION_GLOBAL),
+		VM_ADD_DISPATCH(OP_LOCATION_PROPERTY),
+		VM_ADD_DISPATCH(OP_LOCATION_SUPER_PROPERTY),
+		VM_ADD_DISPATCH(OP_LOCATION_ELEMENT),
+		VM_ADD_DISPATCH(OP_LOAD_INDIRECT),
+		VM_ADD_DISPATCH(OP_STORE_INDIRECT)
+	};
+#define VM_START(ins) \
+	goto* dispatch_table[(ins)]; \
+	{
+#define VM_END() \
+	} \
+	dispatch_end: \
+	const int result = INTERPRET_OK;
+#define VM_CASE(n) START_##n:
+#define VM_BREAK goto dispatch_end
+#else
+#define VM_START(ins) switch ((ins)) {
+#define VM_END() \
+	} \
+	const int result = INTERPRET_OK;
+#define VM_CASE(n) case n:
+#define VM_BREAK break
+#endif
+
+	CallFrame* frame;
+	Uint8 instruction;
+
+	frame = &Frames[FrameCount - 1];
+	frame->IPLast = frame->IP;
+
+#ifdef VM_DEBUG
+	if (Manager->BreakpointsEnabled && BreakpointsPerFunction.count(frame->Function)) {
+		Uint8* bp = BreakpointsPerFunction[frame->Function];
+		Uint32 position = frame->IP - frame->IPStart;
+
+		if (bp[position]) {
+			VMThreadBreakpoint* breakpoint = FindBreakpoint(frame->Function, position);
+			if (breakpoint && breakpoint->Enabled) {
+				Breakpoint(breakpoint);
+
+				if (!FrameCount) {
+					return INTERPRET_EXIT_FROM_DEBUGGER;
+				}
+
+				frame = &Frames[FrameCount - 1];
+			}
+		}
+	}
+#endif
+
+#ifdef VM_DEBUG_INSTRUCTIONS
+	if (DebugInfo) {
+		instruction = *frame->IP;
+		if (instruction < OP_LAST) {
+			Log::Print(Log::LOG_VERBOSE, Bytecode::OpcodeNames[instruction]);
+		}
+		else {
+			Log::Print(Log::LOG_ERROR, "Unknown opcode 0x%02X\n", instruction);
+		}
+	}
+#endif
+
+	VM_START(instruction = ReadByte(frame))
+	// Globals (heap)
+	VM_CASE(OP_GET_GLOBAL) {
+		Uint32 hash = ReadUInt32(frame);
+		Push(GetGlobal(hash));
+		VM_BREAK;
+	}
+	VM_CASE(OP_SET_GLOBAL) {
+		Uint32 hash = ReadUInt32(frame);
+		VMValue value = Peek(0);
+		SetGlobal(hash, value);
+		VM_BREAK;
+	}
+	VM_CASE(OP_DEFINE_GLOBAL) {
+		Uint32 hash = ReadUInt32(frame);
+		if (Manager->Lock()) {
+			VMValue value = Peek(0);
+			// If it already exists,
+			VMValue originalValue;
+			if (Manager->Globals->GetIfExists(hash, &originalValue)) {
+				// If the value is a class and original
+				// is a class,
+				if (IS_CLASS(value) && IS_CLASS(originalValue)) {
+					DoClassExtension(value, originalValue, true);
+				}
+				// Otherwise,
+				else {
+					Manager->Globals->Put(hash, value);
+				}
+			}
+			// Otherwise, if it's a constant,
+			else if (Manager->Constants->GetIfExists(hash, &originalValue)) {
+				// If the value is a class and original
+				// is a class,
+				if (IS_CLASS(value) && IS_CLASS(originalValue)) {
+					DoClassExtension(value, originalValue, true);
+				}
+				// Can't do that
+				else {
+					ThrowRuntimeError(false,
+						"Cannot redefine constant %s!",
+						GetVariableOrMethodName(hash));
+				}
+			}
+			// Otherwise,
+			else {
+				Manager->Globals->Put(hash, value);
+			}
+			Pop();
+			Manager->Unlock();
+		}
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_DEFINE_CONSTANT) {
+		Uint32 hash = ReadUInt32(frame);
+		if (Manager->Lock()) {
+			VMValue value = Peek(0);
+			// If it already exists,
+			VMValue originalValue;
+			if (Manager->Constants->GetIfExists(hash, &originalValue)) {
+				// If the value is a class and original
+				// is a class,
+				if (IS_CLASS(value) && IS_CLASS(originalValue)) {
+					DoClassExtension(value, originalValue, true);
+				}
+				// Can't do that UNLESS it's the same
+				// exact value, in which case we do
+				// nothing
+				else if (!Value::ExactlyEqual(value, originalValue)) {
+					ThrowRuntimeError(false,
+						"Cannot redefine constant %s!",
+						GetVariableOrMethodName(hash));
+				}
+			}
+			// Otherwise, if it's a global,
+			if (Manager->Globals->GetIfExists(hash, &originalValue)) {
+				// If the value is a class and original
+				// is a class,
+				if (IS_CLASS(value) && IS_CLASS(originalValue)) {
+					DoClassExtension(value, originalValue, true);
+				}
+				// Can't do that either, we're trying
+				// to be a constant
+				else {
+					ThrowRuntimeError(false,
+						"Cannot redefine constant %s!",
+						GetVariableOrMethodName(hash));
+				}
+			}
+			// Otherwise,
+			else {
+				Manager->Constants->Put(hash, value);
+			}
+			Pop();
+			Manager->Unlock();
+		}
+		VM_BREAK;
+	}
+
+	// Object Properties (heap)
+	VM_CASE(OP_GET_PROPERTY) {
+		Uint32 hash = ReadUInt32(frame);
+		VMValue object = Pop();
+
+		Push(GetProperty(object, hash));
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_SET_PROPERTY) {
+		Uint32 hash = ReadUInt32(frame);
+		VMValue value = Pop();
+		VMValue object = Pop();
+
+		Push(SetProperty(object, hash, value));
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_HAS_PROPERTY) {
+		Uint32 hash = ReadUInt32(frame);
+
+		VMValue object = Peek(0);
+
+		// If it's an instance,
+		if (IS_INSTANCEABLE(object)) {
+			ObjInstance* instance = AS_INSTANCE(object);
+
+			if (Manager->Lock()) {
+				// Fields have priority over methods
+				if (instance->Fields->Exists(hash)) {
+					Pop();
+					Push(INTEGER_VAL(true));
+					Manager->Unlock();
+					VM_BREAK;
+				}
+
+				ObjClass* klass = instance->Object.Class;
+				if (HasProperty((Obj*)instance,
+					    klass,
+					    hash,
+					    false,
+					    instance->PropertyGet)) {
+					Pop();
+					Push(INTEGER_VAL(true));
+					Manager->Unlock();
+					VM_BREAK;
+				}
+			}
+		}
+		// Otherwise, if it's a class,
+		else if (IS_CLASS(object)) {
+			ObjClass* klass = AS_CLASS(object);
+
+			if (Manager->Lock()) {
+				if (HasProperty(klass, hash)) {
+					Pop();
+					Push(INTEGER_VAL(true));
+					Manager->Unlock();
+					VM_BREAK;
+				}
+			}
+		}
+		// Otherwise, if it's a namespace,
+		else if (IS_NAMESPACE(object)) {
+			ObjNamespace* ns = AS_NAMESPACE(object);
+			if (Manager->Lock()) {
+				if (ns->Fields->Exists(hash)) {
+					Pop();
+					Push(INTEGER_VAL(true));
+					Manager->Unlock();
+					VM_BREAK;
+				}
+			}
+		}
+		// If it's any other object,
+		else if (IS_OBJECT(object) && AS_OBJECT(object)->Class) {
+			Obj* objPtr = AS_OBJECT(object);
+			if (Manager->Lock()) {
+				bool hasProperty = false;
+				if (HasProperty(objPtr, objPtr->Class, hash, false, objPtr->Class->PropertyGet)) {
+					hasProperty = true;
+				}
+
+				Pop();
+				Push(INTEGER_VAL(hasProperty));
+				Manager->Unlock();
+				VM_BREAK;
+			}
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Only instances and classes have properties; value was of type %s.",
+				GetValueTypeString(object));
+		}
+
+		Pop();
+		Push(INTEGER_VAL(false));
+		Manager->Unlock();
+		VM_BREAK;
+	}
+	VM_CASE(OP_GET_ELEMENT) {
+		VMValue at = Pop();
+		VMValue obj = Pop();
+		Push(GetElement(obj, at));
+		VM_BREAK;
+	}
+	VM_CASE(OP_SET_ELEMENT) {
+		VMValue value = Pop();
+		VMValue at = Pop();
+		VMValue obj = Pop();
+		Push(SetElement(obj, at, value));
+		VM_BREAK;
+	}
+
+	// Locals
+	VM_CASE(OP_GET_LOCAL) {
+		Uint8 slot = ReadByte(frame);
+		Push(frame->Slots[slot]);
+		VM_BREAK;
+	}
+	VM_CASE(OP_SET_LOCAL) {
+		Uint8 slot = ReadByte(frame);
+		frame->Slots[slot] = Peek(0);
+		VM_BREAK;
+	}
+
+	// Object Allocations (heap)
+	VM_CASE(OP_NEW_ARRAY) {
+		Uint32 count = ReadUInt32(frame);
+		if (Manager->Lock()) {
+			ObjArray* array = Manager->NewArray();
+			array->Values->reserve(count);
+			for (int i = count - 1; i >= 0; i--) {
+				array->Values->push_back(Peek(i));
+			}
+			for (int i = count - 1; i >= 0; i--) {
+				Pop();
+			}
+			Push(OBJECT_VAL(array));
+			Manager->Unlock();
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_NEW_MAP) {
+		Uint32 count = ReadUInt32(frame);
+		if (Manager->Lock()) {
+			ObjMap* map = Manager->NewMap();
+			for (int i = count - 1; i >= 0; i--) {
+				char* keystr = AS_CSTRING(Peek(i * 2 + 1));
+				map->Values->Put(keystr, Peek(i * 2));
+				map->Keys->Put(keystr, StringUtils::Duplicate(keystr));
+			}
+			for (int i = count - 1; i >= 0; i--) {
+				Pop();
+				Pop();
+			}
+			Push(OBJECT_VAL(map));
+			Manager->Unlock();
+		}
+		VM_BREAK;
+	}
+
+	// Stack constants
+	VM_CASE(OP_NULL) {
+		Push(NULL_VAL);
+		VM_BREAK;
+	}
+	VM_CASE(OP_TRUE) {
+		Push(INTEGER_VAL(1));
+		VM_BREAK;
+	}
+	VM_CASE(OP_FALSE) {
+		Push(INTEGER_VAL(0));
+		VM_BREAK;
+	}
+	VM_CASE(OP_CONSTANT) {
+		Push(ReadConstant(frame));
+		VM_BREAK;
+	}
+	VM_CASE(OP_INTEGER) {
+		Push(INTEGER_VAL(ReadSInt32(frame)));
+		VM_BREAK;
+	}
+	VM_CASE(OP_DECIMAL) {
+		Push(DECIMAL_VAL(ReadFloat(frame)));
+		VM_BREAK;
+	}
+
+	// Switch statements
+	VM_CASE(OP_SWITCH_TABLE) {
+		Uint16 count = ReadUInt16(frame);
+		VMValue switch_value = Pop();
+
+		Uint8* end = frame->IP + ((1 + 2) * count) + 3;
+
+		int default_offset = -1;
+		for (int i = 0; i < count; i++) {
+			int constant_index = ReadByte(frame);
+			int offset = ReadUInt16(frame);
+			if (constant_index == 0xFF) {
+				default_offset = offset;
+			}
+			else {
+				VMValue constant =
+					(*frame->Function->Chunk.Constants)[constant_index];
+				if (Value::SortaEqual(switch_value, constant)) {
+					frame->IP = end + offset;
+					goto JUMPED;
+				}
+			}
+		}
+
+		if (default_offset > -1) {
+			frame->IP = end + default_offset;
+		}
+
+	JUMPED:
+		IP_OPFUNC_SYNC();
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_SWITCH) {
+		enum {
+			SWITCH_CASE_TYPE_CONSTANT,
+			SWITCH_CASE_TYPE_LOCAL,
+			SWITCH_CASE_TYPE_GLOBAL,
+			SWITCH_CASE_TYPE_DEFAULT
+		};
+
+		Uint16 switchTableSize = ReadUInt16(frame);
+		Uint16 count = ReadUInt16(frame);
+		VMValue switch_value = Pop();
+
+		Uint8* end = frame->IP + switchTableSize + 1;
+
+		int default_offset = -1;
+		for (int i = 0; i < count; i++) {
+			Uint8 type = ReadByte(frame);
+			Uint16 offset = ReadUInt16(frame);
+
+			switch (type) {
+			case SWITCH_CASE_TYPE_DEFAULT:
+				default_offset = offset;
+				break;
+			case SWITCH_CASE_TYPE_CONSTANT: {
+				Uint8 constant_index = ReadByte(frame);
+				VMValue constant =
+					(*frame->Function->Chunk.Constants)[constant_index];
+				if (Value::SortaEqual(switch_value, constant)) {
+					frame->IP = end + offset;
+					goto JUMPED2;
+				}
+				break;
+			}
+			case SWITCH_CASE_TYPE_LOCAL: {
+				Uint8 slot = ReadByte(frame);
+				VMValue local_value = frame->Slots[slot];
+				if (Value::SortaEqual(switch_value, local_value)) {
+					frame->IP = end + offset;
+					goto JUMPED2;
+				}
+				break;
+			}
+			case SWITCH_CASE_TYPE_GLOBAL: {
+				Uint32 hash = ReadUInt32(frame);
+				VMValue global_value = NULL_VAL;
+				if (Manager->Lock()) {
+					if (!Manager->Globals->GetIfExists(
+						    hash, &global_value) &&
+						!Manager->Constants->GetIfExists(
+							hash, &global_value)) {
+						ThrowRuntimeError(false,
+							"Variable %s does not exist.",
+							GetVariableOrMethodName(hash));
+					}
+					else {
+						global_value = Value::Delink(global_value);
+					}
+					Manager->Unlock();
+				}
+				if (Value::SortaEqual(switch_value, global_value)) {
+					frame->IP = end + offset;
+					goto JUMPED2;
+				}
+				break;
+			}
+			}
+		}
+
+		if (default_offset > -1) {
+			frame->IP = end + default_offset;
+		}
+
+	JUMPED2:
+		IP_OPFUNC_SYNC();
+		VM_BREAK;
+	}
+
+	// Stack Operations
+	VM_CASE(OP_POP) {
+		Pop();
+		VM_BREAK;
+	}
+	VM_CASE(OP_POPN) {
+		Uint8 count = ReadByte(frame);
+		for (int i = 0; i < count; i++) {
+			Pop();
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_COPY) {
+		Uint8 count = ReadByte(frame);
+		for (int i = 0; i < count; i++) {
+			Push(Peek(count - 1));
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_SAVE_VALUE) {
+		RegisterValue = Pop();
+		VM_BREAK;
+	}
+	VM_CASE(OP_LOAD_VALUE) {
+		Push(RegisterValue);
+		VM_BREAK;
+	}
+	VM_CASE(OP_PRINT) {
+		VMValue v = Peek(0);
+
+		char* textBuffer = (char*)malloc(64);
+
+		PrintBuffer buffer;
+		buffer.Buffer = &textBuffer;
+		buffer.WriteIndex = 0;
+		buffer.BufferSize = 64;
+		ValuePrinter::Print(&buffer, v);
+
+#if HSL_LIBRARY
+		printf("%s\n", textBuffer);
+#else
+		Log::PrintSimple("%s\n", textBuffer);
+#endif
+
+		free(textBuffer);
+
+		Pop();
+		VM_BREAK;
+	}
+	VM_CASE(OP_PRINT_STACK) {
+		PrintStack();
+		VM_BREAK;
+	}
+
+	// Frame stuffs & Returning
+	VM_CASE(OP_RETURN) {
+		InterpretResult = Pop();
+
+		DO_RETURN();
+
+		VM_BREAK;
+	}
+
+	// Jumping
+	VM_CASE(OP_JUMP) {
+		Sint32 offset = ReadSInt16(frame);
+		JUMP(offset);
+		VM_BREAK;
+	}
+	VM_CASE(OP_JUMP_BACK) {
+		Sint32 offset = ReadSInt16(frame);
+		JUMP_BACK(offset);
+		VM_BREAK;
+	}
+	VM_CASE(OP_JUMP_IF_FALSE) {
+		Sint32 offset = ReadSInt16(frame);
+		if (Value::Falsey(Peek(0))) {
+			JUMP(offset);
+		}
+		VM_BREAK;
+	}
+
+	// Numeric Operations
+	VM_CASE(OP_ADD) {
+		Push(Values_Plus());
+		VM_BREAK;
+	}
+	VM_CASE(OP_SUBTRACT) {
+		Push(Values_Minus());
+		VM_BREAK;
+	}
+	VM_CASE(OP_MULTIPLY) {
+		Push(Values_Multiply());
+		VM_BREAK;
+	}
+	VM_CASE(OP_DIVIDE) {
+		Push(Values_Division());
+		VM_BREAK;
+	}
+	VM_CASE(OP_MODULO) {
+		Push(Values_Modulo());
+		VM_BREAK;
+	}
+	VM_CASE(OP_NEGATE) {
+		Push(Values_Negate());
+		VM_BREAK;
+	}
+	VM_CASE(OP_INCREMENT) {
+		Push(Values_Increment());
+		VM_BREAK;
+	}
+	VM_CASE(OP_DECREMENT) {
+		Push(Values_Decrement());
+		VM_BREAK;
+	}
+	// Bit Operations
+	VM_CASE(OP_BITSHIFT_LEFT) {
+		Push(Values_BitwiseLeft());
+		VM_BREAK;
+	}
+	VM_CASE(OP_BITSHIFT_RIGHT) {
+		Push(Values_BitwiseRight());
+		VM_BREAK;
+	}
+	// Bitwise Operations
+	VM_CASE(OP_BW_NOT) {
+		Push(Values_BitwiseNOT());
+		VM_BREAK;
+	}
+	VM_CASE(OP_BW_AND) {
+		Push(Values_BitwiseAnd());
+		VM_BREAK;
+	}
+	VM_CASE(OP_BW_OR) {
+		Push(Values_BitwiseOr());
+		VM_BREAK;
+	}
+	VM_CASE(OP_BW_XOR) {
+		Push(Values_BitwiseXor());
+		VM_BREAK;
+	}
+	// Logical Operations
+	VM_CASE(OP_LG_NOT) {
+		Push(Values_LogicalNOT());
+		VM_BREAK;
+	}
+	VM_CASE(OP_LG_AND) {
+		Push(Values_LogicalAND());
+		VM_BREAK;
+	}
+	VM_CASE(OP_LG_OR) {
+		Push(Values_LogicalOR());
+		VM_BREAK;
+	}
+	// Equality and Comparison Operators
+	VM_CASE(OP_EQUAL) {
+		Push(INTEGER_VAL(Value::SortaEqual(Pop(), Pop())));
+		VM_BREAK;
+	}
+	VM_CASE(OP_EQUAL_NOT) {
+		Push(INTEGER_VAL(!Value::SortaEqual(Pop(), Pop())));
+		VM_BREAK;
+	}
+	VM_CASE(OP_LESS) {
+		Push(Values_LessThan());
+		VM_BREAK;
+	}
+	VM_CASE(OP_GREATER) {
+		Push(Values_GreaterThan());
+		VM_BREAK;
+	}
+	VM_CASE(OP_LESS_EQUAL) {
+		Push(Values_LessThanOrEqual());
+		VM_BREAK;
+	}
+	VM_CASE(OP_GREATER_EQUAL) {
+		Push(Values_GreaterThanOrEqual());
+		VM_BREAK;
+	}
+	// typeof Operator
+	VM_CASE(OP_TYPEOF) {
+		Push(Value_TypeOf());
+		VM_BREAK;
+	}
+
+	// Functions
+	VM_CASE(OP_WITH) {
+		enum {
+			WITH_STATE_INIT,
+			WITH_STATE_ITERATE,
+			WITH_STATE_FINISH,
+			WITH_STATE_INIT_SLOTTED,
+		};
+
+		Uint8 receiverSlot = 0;
+
+		int state = ReadByte(frame);
+		if (state == WITH_STATE_INIT_SLOTTED) {
+			receiverSlot = ReadByte(frame);
+		}
+		int offset = ReadSInt16(frame);
+
+		switch (state) {
+		case WITH_STATE_INIT:
+		case WITH_STATE_INIT_SLOTTED: {
+			size_t numIterators = frame->WithReceiverStackTop - frame->WithReceiverStack;
+			if (numIterators >= MAX_WITH_ITERATION) {
+				ThrowRuntimeError(false, "Too many 'with' iterators in this frame! (%d/%d)", (int)numIterators, MAX_WITH_ITERATION);
+				Pop(); // pop receiver
+				JUMP(offset);
+				break;
+			}
+#ifdef HSL_LIBRARY
+			VMValue receiver = Peek(0);
+			bool result = false;
+			int startIndex = 0;
+			VMValue newReceiver = VMValue{VAL_ERROR};
+			if (Manager->HasWithIteratorHandler) {
+				result = Manager->CallWithIteratorHandler(WITH_STATE_INIT, receiver, &startIndex, &newReceiver);
+			}
+
+			Pop(); // pop receiver
+
+			if (!result) {
+				JUMP(offset);
+				break;
+			}
+
+			// Add iterator
+			*frame->WithIteratorStackTop = NEW_STRUCT_MACRO(WithIter){
+				NULL, NULL, startIndex, NULL, receiverSlot};
+			frame->WithIteratorStackTop++;
+
+			// Backup original receiver
+			*frame->WithReceiverStackTop = frame->Slots[receiverSlot];
+			frame->WithReceiverStackTop++;
+			// Replace receiver
+			if (newReceiver.Type != VAL_ERROR) {
+				frame->Slots[receiverSlot] = newReceiver;
+			}
+			else {
+				frame->Slots[receiverSlot] = NULL_VAL;
+			}
+			break;
+#else
+			Pop(); // pop receiver
+			JUMP(offset);
+			break;
+#endif
+		}
+		case WITH_STATE_ITERATE: {
+			WithIter it = frame->WithIteratorStackTop[-1];
+
+			receiverSlot = it.receiverSlot;
+
+			VMValue originalReceiver = frame->WithReceiverStackTop[-1];
+			// Restore original receiver
+			frame->Slots[receiverSlot] = originalReceiver;
+
+#ifdef HSL_LIBRARY
+			bool result = false;
+			VMValue newReceiver = NULL_VAL;
+			if (Manager->HasWithIteratorHandler) {
+				result = Manager->CallWithIteratorHandler(WITH_STATE_ITERATE, NULL_VAL, &it.index, &newReceiver);
+			}
+			if (result) {
+				JUMP_BACK(offset);
+
+				// Put iterator back onto stack
+				frame->WithIteratorStackTop[-1] = it;
+
+				// Backup original receiver
+				frame->WithReceiverStackTop[-1] = originalReceiver;
+				// Replace receiver
+				if (newReceiver.Type != VAL_ERROR) {
+					frame->Slots[receiverSlot] = newReceiver;
+				}
+				else {
+					frame->Slots[receiverSlot] = NULL_VAL;
+				}
+			}
+#endif
+			break;
+		}
+		case WITH_STATE_FINISH: {
+			WithIter it = frame->WithIteratorStackTop[-1];
+
+#ifdef HSL_LIBRARY
+			if (Manager->HasWithIteratorHandler) {
+				VMValue newReceiver = NULL_VAL;
+				Manager->CallWithIteratorHandler(WITH_STATE_FINISH, NULL_VAL, &it.index, &newReceiver);
+			}
+#endif
+
+			frame->WithReceiverStackTop--;
+
+			VMValue originalReceiver = *frame->WithReceiverStackTop;
+			frame->Slots[it.receiverSlot] = originalReceiver;
+
+			frame->WithIteratorStackTop--;
+			break;
+		}
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_CALL) {
+		int argCount = ReadByte(frame);
+		if (!CallValue(Peek(argCount), argCount)) {
+			if (ThrowRuntimeError(false, "Could not call value!") ==
+				ERROR_RES_CONTINUE) {
+				goto FAIL_OP_CALL;
+			}
+			return INTERPRET_RUNTIME_ERROR;
+		}
+#ifndef USING_VM_FUNCPTRS
+		frame = &Frames[FrameCount - 1];
+#endif
+	FAIL_OP_CALL:
+		VM_BREAK;
+	}
+	VM_CASE(OP_INVOKE) {
+		Uint8 argCount = ReadByte(frame);
+		Uint32 hash = ReadUInt32(frame);
+
+		int status = Invoke(Peek(argCount), argCount, hash);
+		if (status == INVOKE_OK) {
+#ifndef USING_VM_FUNCPTRS
+			frame = &Frames[FrameCount - 1];
+#endif
+		}
+		else if (status == INVOKE_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_SUPER_INVOKE) {
+		Uint8 argCount = ReadByte(frame);
+		Uint32 hash = ReadUInt32(frame);
+
+		// Must be the class of the method being executed, so that super chains can work.
+		ObjClass* currentClass = Frames[FrameCount - 1].Function->Class;
+
+		int status = SuperInvoke(Peek(argCount), currentClass, argCount, hash);
+		if (status == INVOKE_OK) {
+#ifndef USING_VM_FUNCPTRS
+			frame = &Frames[FrameCount - 1];
+#endif
+		}
+		else if (status == INVOKE_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_INVOKE_V3) {
+		Uint8 argCount = ReadByte(frame);
+		Uint32 hash = ReadUInt32(frame);
+		Uint8 isSuper = ReadByte(frame);
+		VMValue receiver = Peek(argCount);
+		int status;
+
+		if (isSuper) {
+			// Must be the class of the method being executed, so that super chains can work.
+			ObjClass* currentClass = Frames[FrameCount - 1].Function->Class;
+
+			status = SuperInvoke(receiver, currentClass, argCount, hash);
+		}
+		else {
+			status = Invoke(receiver, argCount, hash);
+		}
+
+		if (status == INVOKE_OK) {
+#ifndef USING_VM_FUNCPTRS
+			frame = &Frames[FrameCount - 1];
+#endif
+		}
+		else if (status == INVOKE_RUNTIME_ERROR) {
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_CLASS) {
+		Uint32 hash = ReadUInt32(frame);
+		Uint8 type = ReadByte(frame); // Unused
+
+		ObjClass* klass = Manager->NewClass(hash);
+
+		Push(OBJECT_VAL(klass));
+		VM_BREAK;
+	}
+	VM_CASE(OP_INHERIT) {
+		ObjClass* klass = AS_CLASS(Peek(0));
+		Uint32 hashSuper = ReadUInt32(frame);
+
+		if (!Manager->ClassExists(hashSuper)) {
+			const char* className = GetVariableOrMethodName(hashSuper);
+			if (ThrowRuntimeError(false, "Class %s does not exist!", className) ==
+				ERROR_RES_CONTINUE) {
+				goto FAIL_OP_INHERIT;
+			}
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		if (klass->Hash == hashSuper) {
+			if (ThrowRuntimeError(false,
+				    "Class \"%s\" cannot inherit from itself!",
+				    klass->Name) == ERROR_RES_CONTINUE) {
+				goto FAIL_OP_INHERIT;
+			}
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+		VMValue parent;
+		if (Manager->Globals->GetIfExists(hashSuper, &parent) && IS_CLASS(parent)) {
+			if (klass->Parent != nullptr) {
+				if (ThrowRuntimeError(false,
+					    "Class \"%s\" already has a parent!",
+					    klass->Name) == ERROR_RES_CONTINUE) {
+					goto FAIL_OP_INHERIT;
+				}
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			klass->Parent = AS_CLASS(parent);
+		}
+		else {
+			const char* className = GetVariableOrMethodName(hashSuper);
+			if (ThrowRuntimeError(false,
+				    "Class %s must be imported before \"%s\" can inherit it!",
+				    className,
+				    klass->Name) == ERROR_RES_CONTINUE) {
+				goto FAIL_OP_INHERIT;
+			}
+			return INTERPRET_RUNTIME_ERROR;
+		}
+
+	FAIL_OP_INHERIT:
+		VM_BREAK;
+	}
+	VM_CASE(OP_NEW) {
+		int argCount = ReadByte(frame);
+		if (!InstantiateClass(Peek(argCount), argCount)) {
+			if (ThrowRuntimeError(false, "Could not instantiate class!") ==
+				ERROR_RES_CONTINUE) {
+				goto FAIL_OP_NEW;
+			}
+			return INTERPRET_RUNTIME_ERROR;
+		}
+#ifndef USING_VM_FUNCPTRS
+		frame = &Frames[FrameCount - 1];
+#endif
+	FAIL_OP_NEW:
+		VM_BREAK;
+	}
+	VM_CASE(OP_EVENT) {
+		Uint16 index = ReadUInt16(frame);
+		if ((unsigned)index < frame->Module->Functions->size()) {
+			VMValue method = OBJECT_VAL((*frame->Module->Functions)[index]);
+			Push(method);
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_METHOD) {
+		Uint16 index = ReadUInt16(frame);
+		Uint32 hash = ReadUInt32(frame);
+		if ((unsigned)index < frame->Module->Functions->size()) {
+			Manager->DefineMethod(this, (*frame->Module->Functions)[index], hash);
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_EVENT_V4) {
+		Uint8 index = ReadByte(frame);
+		if ((unsigned)index < frame->Module->Functions->size()) {
+			VMValue method = OBJECT_VAL((*frame->Module->Functions)[index]);
+			Push(method);
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_METHOD_V4) {
+		Uint8 index = ReadByte(frame);
+		Uint32 hash = ReadUInt32(frame);
+		if ((unsigned)index < frame->Module->Functions->size()) {
+			Manager->DefineMethod(this, (*frame->Module->Functions)[index], hash);
+		}
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_IMPORT) {
+		Import(ReadConstant(frame));
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_IMPORT_MODULE) {
+		if (!ImportModule(ReadConstant(frame))) {
+			ThrowRuntimeError(false, "Could not import module!");
+		}
+
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_NEW_ENUM) {
+		Uint32 hash = ReadUInt32(frame);
+		ObjEnum* enumeration = Manager->NewEnum(hash);
+		Push(OBJECT_VAL(enumeration));
+		VM_BREAK;
+	}
+	VM_CASE(OP_ENUM_NEXT) {
+		VMValue b = Peek(0);
+		VMValue a = Peek(1);
+
+		if (IS_NOT_NUMBER(a) || IS_NOT_NUMBER(b)) {
+			Pop();
+			Pop();
+			Push(NULL_VAL);
+			VM_BREAK;
+		}
+
+		Push(Values_Plus());
+		VM_BREAK;
+	}
+	VM_CASE(OP_ADD_ENUM) {
+		ObjEnum* enumeration = nullptr;
+		VMValue object = Peek(1);
+		Uint32 hash = ReadUInt32(frame);
+
+		if (IS_ENUM(object)) {
+			enumeration = AS_ENUM(object);
+		}
+		else if (ThrowRuntimeError(false,
+				 "Unexpected value type; value was of type %s.",
+				 GetValueTypeString(object)) == ERROR_RES_CONTINUE) {
+			goto FAIL_OP_ADD_ENUM;
+		}
+
+		if (Manager->Lock()) {
+			VMValue value = Pop();
+			enumeration->Fields->Put(hash, value);
+			Pop();
+			Push(value);
+			Manager->Unlock();
+			VM_BREAK;
+		}
+
+	FAIL_OP_ADD_ENUM:
+		Pop();
+		Pop();
+		Push(NULL_VAL);
+		Manager->Unlock();
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_GET_SUPERCLASS) {
+		ObjClass* klass = nullptr;
+		VMValue object = Peek(0);
+
+		// If it's a class,
+		if (IS_CLASS(object)) {
+			klass = AS_CLASS(object);
+		}
+		// If it's any other object,
+		else if (IS_OBJECT(object)) {
+			klass = AS_OBJECT(object)->Class;
+		}
+
+		if (!klass) {
+			ThrowRuntimeError(false,
+				"Only instances and classes have superclasses; value was of type %s.",
+				GetValueTypeString(object));
+
+			goto FAIL_OP_GET_SUPERCLASS;
+		}
+
+		if (klass->Parent) {
+			Pop();
+			Push(OBJECT_VAL(klass->Parent));
+			VM_BREAK;
+		}
+		else {
+			ThrowRuntimeError(
+				false, "Class '%s' has no superclass!", klass->Name);
+		}
+
+	FAIL_OP_GET_SUPERCLASS:
+		Pop();
+		Push(NULL_VAL);
+		Manager->Unlock();
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_GET_MODULE_LOCAL) {
+		Uint16 slot = ReadUInt16(frame);
+		if (slot < frame->ModuleLocals->size()) {
+			Push((*frame->ModuleLocals)[slot]);
+		}
+		else {
+			Push(NULL_VAL);
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_SET_MODULE_LOCAL) {
+		Uint16 slot = ReadUInt16(frame);
+		if (slot < frame->ModuleLocals->size()) {
+			(*frame->ModuleLocals)[slot] = Peek(0);
+		}
+		VM_BREAK;
+	}
+	VM_CASE(OP_DEFINE_MODULE_LOCAL) {
+		frame->ModuleLocals->push_back(Pop());
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_USE_NAMESPACE) {
+		Uint32 hash = ReadUInt32(frame);
+		if (Manager->Lock()) {
+			VMValue result;
+			if (!Manager->Globals->GetIfExists(hash, &result) &&
+				!Manager->Constants->GetIfExists(hash, &result)) {
+				ThrowRuntimeError(false,
+					"Namespace %s does not exist.",
+					GetVariableOrMethodName(hash));
+				Manager->Unlock();
+				VM_BREAK;
+			}
+
+			if (!IS_NAMESPACE(result)) {
+				ThrowRuntimeError(false, "Value was not a namespace.");
+				Manager->Unlock();
+				VM_BREAK;
+			}
+
+			ObjNamespace* ns = AS_NAMESPACE(result);
+
+			// Namespace already in use, so do nothing
+			if (ns->InUse) {
+				Manager->Unlock();
+				VM_BREAK;
+			}
+
+			ns->Fields->WithAll([this](Uint32 hash, VMValue value) -> void {
+				VMValue originalValue;
+
+				bool replace = true;
+
+				if (Manager->Globals->GetIfExists(hash, &originalValue) ||
+					Manager->Constants->GetIfExists(
+						hash, &originalValue)) {
+					if (IS_CLASS(value) && IS_CLASS(originalValue)) {
+						DoClassExtension(value, originalValue, false);
+						replace = false;
+					}
+				}
+
+				if (replace) {
+					Manager->Globals->Put(hash, value);
+				}
+			});
+
+			ns->InUse = true;
+
+			Manager->Unlock();
+		}
+
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_NEW_HITBOX) {
+		VMValue bottom = Pop();
+		VMValue right = Pop();
+		VMValue top = Pop();
+		VMValue left = Pop();
+
+		if (!IS_INTEGER(left) || !IS_INTEGER(top) || !IS_INTEGER(right) ||
+			!IS_INTEGER(bottom)) {
+			ThrowRuntimeError(
+				false, "Cannot construct hitbox using non-Integer values.");
+			Push(NULL_VAL);
+			VM_BREAK;
+		}
+
+		Push(HITBOX_VAL(
+			AS_INTEGER(left), AS_INTEGER(top), AS_INTEGER(right), AS_INTEGER(bottom)));
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_LOCATION_STACK) {
+		Uint8 slot = ReadByte(frame);
+		Push(LOCATION_VAL(STACK_LOCATION(slot)));
+		VM_BREAK;
+	}
+	VM_CASE(OP_LOCATION_MODULE_LOCAL) {
+		Uint16 slot = ReadUInt16(frame);
+		Push(LOCATION_VAL(MODULE_LOCATION(slot)));
+		VM_BREAK;
+	}
+	VM_CASE(OP_LOCATION_GLOBAL) {
+		Uint32 hash = ReadUInt32(frame);
+		Push(LOCATION_VAL(GLOBAL_LOCATION(hash)));
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_LOCATION_PROPERTY) {
+		Uint32 hash = ReadUInt32(frame);
+
+		if (IS_LOCATION(Peek(0))) {
+			VMLocation location = AS_LOCATION(Pop());
+
+			// This is just what OP_LOAD_INDIRECT does.
+			switch (location.Type) {
+			case LOC_STACK:
+				Push(frame->Slots[location.as.Slot]);
+				break;
+			case LOC_MODULE:
+				Push((*frame->Module->Locals)[location.as.Slot]);
+				break;
+			case LOC_GLOBAL:
+				Push(GetGlobal(location.as.Hash));
+				break;
+			case LOC_PROPERTY: {
+				VMValue object = Pop();
+				Push(GetProperty(object, location.as.Hash));
+				break;
+			}
+			case LOC_ELEMENT: {
+				VMValue at = Pop();
+				VMValue obj = Pop();
+				Push(GetElement(obj, at));
+				break;
+			}
+			}
+		}
+
+		Push(LOCATION_VAL(PROPERTY_LOCATION(hash)));
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_LOCATION_SUPER_PROPERTY) {
+		Uint32 hash = ReadUInt32(frame);
+		ObjClass* klass = nullptr;
+		VMValue value;
+
+		if (IS_LOCATION(Peek(0))) {
+			VMLocation location = AS_LOCATION(Pop());
+
+			// This is just what OP_LOAD_INDIRECT does.
+			switch (location.Type) {
+			case LOC_STACK:
+				value = frame->Slots[location.as.Slot];
+				break;
+			case LOC_MODULE:
+				value = (*frame->Module->Locals)[location.as.Slot];
+				break;
+			case LOC_GLOBAL:
+				value = GetGlobal(location.as.Hash);
+				break;
+			case LOC_PROPERTY: {
+				VMValue object = Pop();
+				value = GetProperty(object, location.as.Hash);
+				break;
+			}
+			case LOC_ELEMENT: {
+				VMValue at = Pop();
+				VMValue obj = Pop();
+				value = GetElement(obj, at);
+				break;
+			}
+			}
+		}
+		else {
+			value = Pop();
+		}
+
+		// If it's a class,
+		if (IS_CLASS(value)) {
+			klass = AS_CLASS(value);
+		}
+		// If it's any other object,
+		else if (IS_OBJECT(value)) {
+			klass = AS_OBJECT(value)->Class;
+		}
+
+		if (!klass) {
+			ThrowRuntimeError(false,
+				"Only instances and classes have superclasses; value was of type %s.",
+				GetValueTypeString(value));
+			Push(NULL_VAL);
+			VM_BREAK;
+		}
+		else if (!klass->Parent) {
+			ThrowRuntimeError(
+				false, "Class '%s' has no superclass!", klass->Name);
+			Push(NULL_VAL);
+			VM_BREAK;
+		}
+
+		Push(OBJECT_VAL(klass->Parent));
+		Push(LOCATION_VAL(PROPERTY_LOCATION(hash)));
+		VM_BREAK;
+	}
+	VM_CASE(OP_LOCATION_ELEMENT) {
+		if (IS_LOCATION(Peek(1))) {
+			VMValue value = Pop();
+			VMLocation location = AS_LOCATION(Pop());
+
+			// This is just what OP_LOAD_INDIRECT does.
+			switch (location.Type) {
+			case LOC_STACK:
+				Push(frame->Slots[location.as.Slot]);
+				break;
+			case LOC_MODULE:
+				Push((*frame->Module->Locals)[location.as.Slot]);
+				break;
+			case LOC_GLOBAL:
+				Push(GetGlobal(location.as.Hash));
+				break;
+			case LOC_PROPERTY: {
+				VMValue object = Pop();
+				Push(GetProperty(object, location.as.Hash));
+				break;
+			}
+			case LOC_ELEMENT: {
+				VMValue at = Pop();
+				VMValue obj = Pop();
+				Push(GetElement(obj, at));
+				break;
+			}
+			}
+
+			Push(value);
+		}
+
+		Push(LOCATION_VAL(ELEMENT_LOCATION()));
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_LOAD_INDIRECT) {
+		if (!IS_LOCATION(Peek(0))) {
+			ThrowRuntimeError(false, "Cannot indirectly load from value.");
+			Push(NULL_VAL);
+			VM_BREAK;
+		}
+
+		VMLocation location = AS_LOCATION(Pop());
+
+		switch (location.Type) {
+		case LOC_STACK:
+			Push(frame->Slots[location.as.Slot]);
+			break;
+		case LOC_MODULE:
+			Push((*frame->Module->Locals)[location.as.Slot]);
+			break;
+		case LOC_GLOBAL:
+			Push(GetGlobal(location.as.Hash));
+			break;
+		case LOC_PROPERTY: {
+			VMValue object = Pop();
+			Push(GetProperty(object, location.as.Hash));
+			break;
+		}
+		case LOC_ELEMENT: {
+			VMValue at = Pop();
+			VMValue obj = Pop();
+			Push(GetElement(obj, at));
+			break;
+		}
+		}
+
+		VM_BREAK;
+	}
+	VM_CASE(OP_STORE_INDIRECT) {
+		if (!IS_LOCATION(Peek(1))) {
+			ThrowRuntimeError(false, "Cannot indirectly store on value.");
+			VM_BREAK;
+		}
+
+		VMValue value = Pop();
+		VMLocation location = AS_LOCATION(Pop());
+
+		switch (location.Type) {
+		case LOC_STACK:
+			frame->Slots[location.as.Slot] = value;
+			break;
+		case LOC_MODULE:
+			(*frame->Module->Locals)[location.as.Slot] = value;
+			break;
+		case LOC_GLOBAL:
+			SetGlobal(location.as.Hash, value);
+			break;
+		case LOC_PROPERTY: {
+			VMValue object = Pop();
+			SetProperty(object, location.as.Hash, value);
+			break;
+		}
+		case LOC_ELEMENT: {
+			VMValue at = Pop();
+			VMValue object = Pop();
+			SetElement(object, at, value);
+			break;
+		}
+		}
+
+		Push(value);
+
+		VM_BREAK;
+	}
+
+	VM_CASE(OP_NOP) {
+		VM_BREAK;
+	}
+	VM_CASE(OP_UNUSED_1) {
+		VM_BREAK;
+	}
+	VM_CASE(OP_UNUSED_2) {
+		VM_BREAK;
+	}
+	VM_END();
+
+#ifdef VM_DEBUG_INSTRUCTIONS
+	if (DebugInfo && !AttachedDebuggerCount) {
+		Log::Print(Log::LOG_WARN, "START");
+		PrintStack();
+	}
+#endif
+
+	return result;
+}
+
+void VMThread::RunInstructionSet() {
+	while (true) {
+		int ret = RunInstruction();
+		if (ret != INTERPRET_OK) {
+			return;
+		}
+#ifdef VM_DEBUG
+		else if (FrameCount == 0) {
+			return;
+		}
+#endif
+	}
+}
+
+bool VMThread::InREPL() {
+#ifdef HSL_STANDALONE_REPL
+	if (InStandaloneREPL()) {
+		return true;
+	}
+#endif
+
+#ifdef VM_DEBUG
+	if (AttachedDebuggerCount) {
+		return true;
+	}
+#endif
+
+	return false;
+}
+// #endregion
+
+void VMThread::RunValue(VMValue value, int argCount) {
+	int lastReturnFrame = ReturnFrame;
+
+	ReturnFrame = FrameCount;
+	CallValue(value, argCount);
+	RunInstructionSet();
+	ReturnFrame = lastReturnFrame;
+}
+void VMThread::RunFunction(ObjFunction* func, int argCount) {
+	VMValue* lastStackTop = StackTop;
+	int lastReturnFrame = ReturnFrame;
+
+	ReturnFrame = FrameCount;
+
+	Call(func, argCount);
+	RunInstructionSet();
+
+	ReturnFrame = lastReturnFrame;
+	StackTop = lastStackTop;
+}
+int VMThread::Invoke(VMValue receiver, Uint8 argCount, Uint32 hash) {
+	if (IS_INSTANCEABLE(receiver)) {
+		ObjInstance* instance = AS_INSTANCE(receiver);
+		if (InvokeForInstance(instance, instance->Object.Class, hash, argCount)) {
+			return INVOKE_OK;
+		}
+
+		if (ThrowRuntimeError(false,
+			    "Could not invoke %s!",
+			    GetVariableOrMethodName(hash)) == ERROR_RES_CONTINUE) {
+			return INVOKE_FAIL;
+		}
+
+		return INVOKE_RUNTIME_ERROR;
+	}
+	else if (IS_CLASS(receiver)) {
+		VMValue result;
+		ObjClass* klass = AS_CLASS(receiver);
+		if (klass->Methods->GetIfExists(hash, &result)) {
+			if (CallValue(result, argCount)) {
+				return INVOKE_OK;
+			}
+
+			if (ThrowRuntimeError(false,
+				    "Could not invoke %s!",
+				    GetVariableOrMethodName(hash)) == ERROR_RES_CONTINUE) {
+				return INVOKE_FAIL;
+			}
+
+			return INVOKE_RUNTIME_ERROR;
+		}
+
+		if (ThrowRuntimeError(false,
+			    "Method %s does not exist in class '%s'!",
+			    GetVariableOrMethodName(hash),
+			    klass->Name) == ERROR_RES_CONTINUE) {
+			return INVOKE_FAIL;
+		}
+
+		return INVOKE_RUNTIME_ERROR;
+	}
+	else if (IS_OBJECT(receiver)) {
+		ObjClass* klass = AS_OBJECT(receiver)->Class;
+		if (klass != nullptr) {
+			VMValue result;
+			if (klass->Methods->GetIfExists(hash, &result)) {
+				if (CallForObject(result, argCount)) {
+					return INVOKE_OK;
+				}
+
+				if (ThrowRuntimeError(false,
+					    "Could not invoke %s!",
+					    GetVariableOrMethodName(hash)) == ERROR_RES_CONTINUE) {
+					return INVOKE_FAIL;
+				}
+
+				return INVOKE_RUNTIME_ERROR;
+			}
+		}
+
+		if (ThrowRuntimeError(false,
+			    "Method %s does not exist in object.",
+			    GetVariableOrMethodName(hash)) == ERROR_RES_CONTINUE) {
+			return INVOKE_FAIL;
+		}
+
+		return INVOKE_RUNTIME_ERROR;
+	}
+
+	if (ThrowRuntimeError(false, "Only instances and classes have methods.") ==
+		ERROR_RES_CONTINUE) {
+		return INVOKE_FAIL;
+	}
+
+	return INVOKE_RUNTIME_ERROR;
+}
+int VMThread::SuperInvoke(VMValue receiver, ObjClass* klass, Uint8 argCount, Uint32 hash) {
+	if (!IS_INSTANCEABLE(receiver)) {
+		if (ThrowRuntimeError(false,
+			    "Cannot invoke %s in value of type %s!",
+			    GetVariableOrMethodName(hash),
+			    GetValueTypeString(receiver)) == ERROR_RES_CONTINUE) {
+			return INVOKE_FAIL;
+		}
+
+		return INVOKE_RUNTIME_ERROR;
+	}
+
+	Obj* obj = AS_OBJECT(receiver);
+
+	// FIXME: Is this even possible?
+	if (klass == nullptr) {
+		return INVOKE_FAIL;
+	}
+
+	ObjClass* parentClass = Manager->GetClassParent(obj, klass);
+	if (!parentClass) {
+		ThrowRuntimeError(false,
+			"Class '%s' does not have a parent to call method from!",
+			klass->Name);
+		return INVOKE_FAIL;
+	}
+
+	VMValue callable;
+	if (!Manager->GetClassMethod(obj, parentClass, hash, &callable)) {
+		return INVOKE_FAIL;
+	}
+
+	if (CallForObject(callable, argCount)) {
+		return INVOKE_OK;
+	}
+
+	if (ThrowRuntimeError(false, "Could not invoke %s!", GetVariableOrMethodName(hash)) ==
+		ERROR_RES_CONTINUE) {
+		return INVOKE_FAIL;
+	}
+
+	return INVOKE_RUNTIME_ERROR;
+}
+void VMThread::InvokeForEntity(VMValue value, int argCount) {
+	VMValue* lastStackTop = StackTop;
+	int lastReturnFrame = ReturnFrame;
+
+	FunctionToInvoke = value;
+	ReturnFrame = FrameCount;
+
+	if (CallForObject(value, argCount)) {
+		switch (OBJECT_TYPE(value)) {
+		case OBJ_BOUND_METHOD:
+		case OBJ_FUNCTION:
+			RunInstructionSet();
+			break;
+		default:
+			// Do nothing for native functions, as they've already been called
+			break;
+		}
+	}
+
+	FunctionToInvoke = NULL_VAL;
+	ReturnFrame = lastReturnFrame;
+	StackTop = lastStackTop;
+}
+VMValue VMThread::RunEntityFunction(ObjFunction* function, int argCount) {
+	VMValue* lastStackTop = StackTop;
+	int lastReturnFrame = ReturnFrame;
+
+	FunctionToInvoke = OBJECT_VAL(function);
+	ReturnFrame = FrameCount;
+
+	Call(function, argCount);
+	RunInstructionSet();
+
+	FunctionToInvoke = NULL_VAL;
+	ReturnFrame = lastReturnFrame;
+	StackTop = lastStackTop;
+
+	return InterpretResult;
+}
+void VMThread::CallInitializer(VMValue value) {
+	FunctionToInvoke = value;
+
+	ObjFunction* initializer = AS_FUNCTION(value);
+	if (initializer->MinArity) {
+		ThrowRuntimeError(false, "Initializer must have no parameters.");
+	}
+	else {
+		VMValue* lastStackTop = StackTop;
+		int lastReturnFrame = ReturnFrame;
+
+		ReturnFrame = FrameCount;
+
+		RunFunction(initializer, 0);
+
+		ReturnFrame = lastReturnFrame;
+		StackTop = lastStackTop;
+	}
+
+	FunctionToInvoke = NULL_VAL;
+}
+
+VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
+	VMValue result;
+
+	// If it's an instance,
+	if (IS_INSTANCEABLE(object)) {
+		ObjInstance* instance = AS_INSTANCE(object);
+
+		if (Manager->Lock()) {
+			// Fields have priority over methods
+			if (instance->Fields->GetIfExists(hash, &result)) {
+				result = Value::Delink(result);
+				Manager->Unlock();
+				return result;
+			}
+
+			ObjClass* klass = instance->Object.Class;
+			if (GetProperty((Obj*)instance,
+				    klass,
+				    hash,
+				    false,
+				    instance->PropertyGet)) {
+				result = Pop();
+				Manager->Unlock();
+				return result;
+			}
+
+			ThrowRuntimeError(false,
+				"Could not find %s in instance!",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return NULL_VAL;
+		}
+	}
+	// Otherwise, if it's a class,
+	else if (IS_CLASS(object)) {
+		ObjClass* klass = AS_CLASS(object);
+
+		if (Manager->Lock()) {
+			if (GetProperty(klass, hash)) {
+				result = Pop();
+				Manager->Unlock();
+				return result;
+			}
+
+			ThrowRuntimeError(false,
+				"Could not find %s in class!",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return NULL_VAL;
+		}
+	}
+	// Otherwise, if it's a namespace,
+	else if (IS_NAMESPACE(object)) {
+		ObjNamespace* ns = AS_NAMESPACE(object);
+
+		if (Manager->Lock()) {
+			if (ns->Fields->GetIfExists(hash, &result)) {
+				result = Value::Delink(result);
+				Manager->Unlock();
+				return result;
+			}
+
+			ThrowRuntimeError(false,
+				"Could not find %s in namespace!",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return NULL_VAL;
+		}
+	}
+	// If it's any other object,
+	else if (IS_OBJECT(object) && AS_OBJECT(object)->Class) {
+		Obj* objPtr = AS_OBJECT(object);
+
+		if (Manager->Lock()) {
+			if (GetProperty(objPtr, objPtr->Class, hash, false, objPtr->Class->PropertyGet)) {
+				result = Pop();
+				Manager->Unlock();
+				return result;
+			}
+
+			ThrowRuntimeError(false,
+				"Could not find %s in object!",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+		}
+
+		return NULL_VAL;
+	}
+	else {
+		ThrowRuntimeError(false,
+			"Only instances and classes have properties; value was of type %s.",
+			GetValueTypeString(object));
+		return NULL_VAL;
+	}
+
+	return NULL_VAL;
+}
+VMValue VMThread::SetProperty(VMValue object, Uint32 hash, VMValue value) {
+	Table* fields;
+	ObjClass* klass;
+	Obj* objPtr = AS_OBJECT(object);
+	ValueSetFn setter = nullptr;
+
+	if (IS_INSTANCEABLE(object)) {
+		ObjInstance* instance = AS_INSTANCE(object);
+		klass = instance->Object.Class;
+		fields = instance->Fields;
+		setter = instance->PropertySet;
+	}
+	else if (IS_CLASS(object)) {
+		klass = AS_CLASS(object);
+		fields = klass->Fields;
+	}
+	else if (IS_OBJECT(object) && objPtr->Class) {
+		klass = objPtr->Class;
+		fields = klass->Fields;
+		setter = klass->PropertySet;
+	}
+	else if (IS_NAMESPACE(object)) {
+		ThrowRuntimeError(false, "Cannot modify a namespace.");
+		return value;
+	}
+	else if (IS_ENUM(object)) {
+		ThrowRuntimeError(false, "Cannot modify the values of an enumeration.");
+		return value;
+	}
+	else {
+		ThrowRuntimeError(false,
+			"Only instances and classes have properties; value was of type %s.",
+			GetValueTypeString(object));
+		return value;
+	}
+
+	if (Manager->Lock()) {
+		VMValue field;
+		if (fields->GetIfExists(hash, &field)) {
+			if (!SetProperty(fields, hash, field, value)) {
+				Manager->Unlock();
+				return value;
+			}
+		}
+		else {
+			if (setter && setter(objPtr, hash, value, this)) {
+				Manager->Unlock();
+				return value;
+			}
+
+			fields->Put(hash, value);
+		}
+
+		Manager->Unlock();
+		return value;
+	}
+
+	return value;
+}
+
+VMValue VMThread::GetElement(VMValue object, VMValue at) {
+	if (IS_ARRAY(object)) {
+		if (!IS_INTEGER(at)) {
+			ThrowRuntimeError(false,
+				"Cannot get value from array using non-Integer value as an index.");
+			return NULL_VAL;
+		}
+
+		if (Manager->Lock()) {
+			ObjArray* array = AS_ARRAY(object);
+			int index = AS_INTEGER(at);
+			if (index < 0 || (Uint32)index >= array->Values->size()) {
+				ThrowRuntimeError(false,
+					"Index %d is out of bounds of array of size %d.",
+					index,
+					(int)array->Values->size());
+				Manager->Unlock();
+				return NULL_VAL;
+			}
+			VMValue result = (*array->Values)[index];
+			Manager->Unlock();
+			return result;
+		}
+	}
+	else if (IS_MAP(object)) {
+		if (!IS_STRING(at)) {
+			ThrowRuntimeError(false,
+				"Cannot get value from map using non-String value as an index.");
+			return NULL_VAL;
+		}
+
+		if (Manager->Lock()) {
+			ObjMap* map = AS_MAP(object);
+			char* index = AS_CSTRING(at);
+			if (!*index) {
+				ThrowRuntimeError(false, "Cannot find value at empty key.");
+				Manager->Unlock();
+				return NULL_VAL;
+			}
+
+			VMValue result;
+			if (!map->Values->GetIfExists(index, &result)) {
+				result = NULL_VAL;
+			}
+
+			Manager->Unlock();
+			return result;
+		}
+	}
+	else if (IS_HITBOX(object)) {
+		if (!IS_INTEGER(at)) {
+			ThrowRuntimeError(false,
+				"Cannot get value from hitbox using non-Integer value as an index.");
+			return NULL_VAL;
+		}
+
+		Sint16* hitbox = AS_HITBOX(object);
+		int index = AS_INTEGER(at);
+		if (index < HITBOX_LEFT || index > HITBOX_BOTTOM) {
+			ThrowRuntimeError(false,
+				"%d is not a valid hitbox slot. (0 - 3)",
+				index);
+		}
+		return INTEGER_VAL(hitbox[index]);
+	}
+	else {
+		if (!IS_OBJECT(object)) {
+			ThrowRuntimeError(false,
+				"Cannot get element of %s.",
+				GetValueTypeString(object));
+			return NULL_VAL;
+		}
+		else if (Manager->Lock()) {
+			Obj* objPtr = AS_OBJECT(object);
+			VMValue result;
+
+			if (IS_INSTANCEABLE(object)) {
+				ObjInstance* instance = AS_INSTANCE(object);
+				if (instance->ElementGet &&
+					instance->ElementGet(objPtr, at, &result, this)) {
+					Manager->Unlock();
+					return result;
+				}
+			}
+			else if (objPtr->Class && objPtr->Class->ElementGet &&
+				objPtr->Class->ElementGet(objPtr, at, &result, this)) {
+				Manager->Unlock();
+				return result;
+			}
+
+			Manager->Unlock();
+		}
+
+		ThrowRuntimeError(false,
+			"Cannot get value in object of type %s.",
+			GetValueTypeString(object));
+	}
+
+	return NULL_VAL;
+}
+VMValue VMThread::SetElement(VMValue object, VMValue at, VMValue value) {
+	if (IS_ARRAY(object)) {
+		if (!IS_INTEGER(at)) {
+			ThrowRuntimeError(false,
+				"Cannot set value from array using non-Integer value as an index.");
+			return value;
+		}
+
+		if (Manager->Lock()) {
+			ObjArray* array = AS_ARRAY(object);
+			int index = AS_INTEGER(at);
+			if (index < 0 || (Uint32)index >= array->Values->size()) {
+				ThrowRuntimeError(false,
+					"Index %d is out of bounds of array of size %d.",
+					index,
+					(int)array->Values->size());
+				Manager->Unlock();
+				return value;
+			}
+			(*array->Values)[index] = value;
+			Manager->Unlock();
+		}
+	}
+	else if (IS_MAP(object)) {
+		if (!IS_STRING(at)) {
+			ThrowRuntimeError(false,
+				"Cannot get value from map using non-String value as an index.");
+			return value;
+		}
+
+		if (Manager->Lock()) {
+			ObjMap* map = AS_MAP(object);
+			char* index = AS_CSTRING(at);
+			if (!*index) {
+				ThrowRuntimeError(false, "Cannot find value at empty key.");
+				Manager->Unlock();
+				return value;
+			}
+
+			map->Values->Put(index, value);
+			map->Keys->Put(index, StringUtils::Duplicate(index));
+			Manager->Unlock();
+		}
+	}
+	else {
+		if (!IS_OBJECT(object)) {
+			ThrowRuntimeError(false,
+				"Cannot set element of %s.",
+				GetValueTypeString(object));
+			return value;
+		}
+		else if (Manager->Lock()) {
+			Obj* objPtr = AS_OBJECT(object);
+
+			if (IS_INSTANCEABLE(object)) {
+				ObjInstance* instance = AS_INSTANCE(object);
+				if (instance->ElementSet &&
+					instance->ElementSet(objPtr, at, value, this)) {
+					Manager->Unlock();
+					return value;
+				}
+			}
+			else if (objPtr->Class && objPtr->Class->ElementSet &&
+				objPtr->Class->ElementSet(objPtr, at, value, this)) {
+				Manager->Unlock();
+				return value;
+			}
+
+			Manager->Unlock();
+		}
+
+		ThrowRuntimeError(false,
+			"Cannot set value in object of type %s.",
+			GetValueTypeString(object));
+	}
+
+	return value;
+}
+
+VMValue VMThread::GetGlobal(Uint32 hash) {
+	if (Manager->Lock()) {
+		VMValue result;
+		if (!Manager->Constants->GetIfExists(hash, &result) &&
+			!Manager->Globals->GetIfExists(hash, &result)) {
+			ThrowRuntimeError(false,
+				"Variable %s does not exist.",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return NULL_VAL;
+		}
+
+		result = Value::Delink(result);
+		Manager->Unlock();
+		return result;
+	}
+
+	return NULL_VAL;
+}
+void VMThread::SetGlobal(Uint32 hash, VMValue value) {
+	if (!Manager->Lock()) {
+		return;
+	}
+
+	if (!Manager->Globals->Exists(hash)) {
+		if (Manager->Constants->Exists(hash)) {
+			ThrowRuntimeError(false,
+			    "Cannot redefine constant %s!",
+			    GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return;
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Global variable %s does not exist.",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return;
+		}
+	}
+
+	VMValue LHS = Manager->Globals->Get(hash);
+	switch (LHS.Type) {
+	case VAL_LINKED_INTEGER: {
+		VMValue result = Value::CastAsInteger(value);
+		if (IS_NULL(result)) {
+			// Conversion failed
+			ThrowRuntimeError(false,
+				"Expected value to be of type %s instead of %s.",
+				GetTypeString(VAL_INTEGER),
+				GetValueTypeString(value));
+			break;
+		}
+		AS_LINKED_INTEGER(LHS) = AS_INTEGER(result);
+		break;
+	}
+	case VAL_LINKED_DECIMAL: {
+		VMValue result = Value::CastAsDecimal(value);
+		if (IS_NULL(result)) {
+			// Conversion failed
+			ThrowRuntimeError(false,
+				"Expected value to be of type %s instead of %s.",
+				GetTypeString(VAL_DECIMAL),
+				GetValueTypeString(value));
+			break;
+		}
+		AS_LINKED_DECIMAL(LHS) = AS_DECIMAL(result);
+		break;
+	}
+	default:
+		Manager->Globals->Put(hash, value);
+		break;
+	}
+
+	Manager->Unlock();
+}
+
+bool VMThread::GetProperty(Obj* object,
+	ObjClass* klass,
+	Uint32 hash,
+	bool checkFields,
+	ValueGetFn getter) {
+	if (Manager->Lock()) {
+		VMValue value;
+
+		if (checkFields && klass->Fields->GetIfExists(hash, &value)) {
+			// Fields have priority over methods
+			Push(Value::Delink(value));
+			Manager->Unlock();
+			return true;
+		}
+		else if (klass->Methods->GetIfExists(hash, &value)) {
+			Push(value);
+			Manager->Unlock();
+			return true;
+		}
+
+		if (getter) {
+			try {
+				if (getter(object, hash, &value, this)) {
+					Push(value);
+					Manager->Unlock();
+					return true;
+				}
+			} catch (const ScriptException& error) {
+				Push(NULL_VAL);
+
+				ThrowRuntimeError(false, "%s", error.what());
+
+				Manager->Unlock();
+
+				// This already pushes to the stack, so it has to return true.
+				return true;
+			}
+		}
+
+		ObjClass* parentClass = Manager->GetClassParent(object, klass);
+		if (parentClass) {
+			Manager->Unlock();
+			return GetProperty(parentClass, hash, checkFields);
+		}
+		else {
+			ThrowRuntimeError(
+				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			Push(NULL_VAL);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::GetProperty(Obj* object, Uint32 hash, ValueGetFn getter) {
+	if (Manager->Lock()) {
+		VMValue value;
+
+		if (getter && getter(object, hash, &value, this)) {
+			Push(value);
+			Manager->Unlock();
+			return true;
+		}
+
+		ThrowRuntimeError(false, "Undefined property %s.", GetVariableOrMethodName(hash));
+		Push(NULL_VAL);
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::GetProperty(ObjClass* klass, Uint32 hash, bool checkFields) {
+	if (Manager->Lock()) {
+		VMValue value;
+
+		if (checkFields && klass->Fields->GetIfExists(hash, &value)) {
+			// Fields have priority over methods
+			Push(Value::Delink(value));
+			Manager->Unlock();
+			return true;
+		}
+		else if (klass->Methods->GetIfExists(hash, &value)) {
+			Push(value);
+			Manager->Unlock();
+			return true;
+		}
+
+		ObjClass* parentClass = klass->Parent;
+		if (parentClass) {
+			Manager->Unlock();
+			return GetProperty(parentClass, hash);
+		}
+		else {
+			ThrowRuntimeError(
+				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			Push(NULL_VAL);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::GetProperty(ObjClass* klass, Uint32 hash) {
+	if (Manager->Lock()) {
+		VMValue value;
+
+		if (klass->Fields->GetIfExists(hash, &value)) {
+			// Fields have priority over methods
+			Push(Value::Delink(value));
+			Manager->Unlock();
+			return true;
+		}
+		else if (klass->Methods->GetIfExists(hash, &value)) {
+			Push(value);
+			Manager->Unlock();
+			return true;
+		}
+
+		ObjClass* parentClass = klass->Parent;
+		if (parentClass) {
+			Manager->Unlock();
+			return GetProperty(parentClass, hash);
+		}
+		else {
+			ThrowRuntimeError(
+				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			Push(NULL_VAL);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::HasProperty(Obj* object,
+	ObjClass* klass,
+	Uint32 hash,
+	bool checkFields,
+	ValueGetFn getter) {
+	if (Manager->Lock()) {
+		if (checkFields && klass->Fields->Exists(hash)) {
+			// Fields have priority over methods
+			Manager->Unlock();
+			return true;
+		}
+		else if (klass->Methods->Exists(hash)) {
+			Manager->Unlock();
+			return true;
+		}
+
+		if (getter) {
+			try {
+				if (getter(object, hash, nullptr, this)) {
+					Manager->Unlock();
+					return true;
+				}
+			} catch (const ScriptException& error) {
+				ThrowRuntimeError(false, "%s", error.what());
+				Manager->Unlock();
+				return false;
+			}
+		}
+
+		ObjClass* parentClass = klass->Parent;
+		if (parentClass) {
+			Manager->Unlock();
+			return HasProperty(parentClass, hash, checkFields);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::HasProperty(Obj* object, Uint32 hash, ValueGetFn getter) {
+	if (Manager->Lock()) {
+		if (getter && getter(object, hash, nullptr, this)) {
+			Manager->Unlock();
+			return true;
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::HasProperty(ObjClass* klass, Uint32 hash, bool checkFields) {
+	if (Manager->Lock()) {
+		if (checkFields && klass->Fields->Exists(hash)) {
+			// Fields have priority over methods
+			Manager->Unlock();
+			return true;
+		}
+		else if (klass->Methods->Exists(hash)) {
+			Manager->Unlock();
+			return true;
+		}
+
+		ObjClass* parentClass = klass->Parent;
+		if (parentClass) {
+			Manager->Unlock();
+			return HasProperty(parentClass, hash, checkFields);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::HasProperty(ObjClass* klass, Uint32 hash) {
+	if (Manager->Lock()) {
+		if (klass->Methods->Exists(hash)) {
+			Manager->Unlock();
+			return true;
+		}
+
+		ObjClass* parentClass = klass->Parent;
+		if (parentClass) {
+			Manager->Unlock();
+			return HasProperty(parentClass, hash);
+		}
+	}
+	Manager->Unlock();
+	return false;
+}
+bool VMThread::SetProperty(Table* fields, Uint32 hash, VMValue field, VMValue value) {
+	switch (field.Type) {
+	case VAL_LINKED_INTEGER:
+		if (!DoIntegerConversion(value)) {
+			return false;
+		}
+		AS_LINKED_INTEGER(field) = AS_INTEGER(value);
+		break;
+	case VAL_LINKED_DECIMAL:
+		if (!DoDecimalConversion(value)) {
+			return false;
+		}
+		AS_LINKED_DECIMAL(field) = AS_DECIMAL(value);
+		break;
+	default:
+		fields->Put(hash, value);
+	}
+	return true;
+}
+bool VMThread::BindMethod(VMValue receiver, VMValue method) {
+	ObjBoundMethod* bound = Manager->NewBoundMethod(receiver, AS_FUNCTION(method));
+	Push(OBJECT_VAL(bound));
+	return true;
+}
+bool VMThread::CallBoundMethod(ObjBoundMethod* bound, int argCount) {
+	// Replace the bound method with the receiver so it's in the
+	// right slot when the method is called.
+	StackTop[-argCount - 1] = bound->Receiver;
+	return Call(bound->Method, argCount);
+}
+bool VMThread::CallValue(VMValue callee, int argCount) {
+	if (!IS_CALLABLE(callee)) {
+		ThrowRuntimeError(
+			false, "Cannot call value of type %s.", GetValueTypeString(callee));
+		return false;
+	}
+
+	bool result = false;
+	if (Manager->Lock()) {
+		switch (OBJECT_TYPE(callee)) {
+		case OBJ_BOUND_METHOD:
+			result = CallBoundMethod(AS_BOUND_METHOD(callee), argCount);
+			break;
+		case OBJ_FUNCTION:
+			result = Call(AS_FUNCTION(callee), argCount);
+			break;
+		case OBJ_NATIVE_FUNCTION: {
+			NativeFn nativeFn = AS_NATIVE_FUNCTION(callee);
+
+			VMValue returnValue = NULL_VAL;
+			try {
+				returnValue = nativeFn(argCount, StackTop - argCount, this);
+			} catch (const ScriptException& error) {
+				ThrowRuntimeError(false, "%s", error.what());
+			}
+
+			StackTop -= argCount; // Pop arguments
+			StackTop -= 1; // Pop receiver / class
+			Push(returnValue); // Push result
+
+			result = true;
+			break;
+		}
+#ifdef HSL_LIBRARY
+		case OBJ_API_NATIVE_FUNCTION: {
+			APINativeFn nativeFn = AS_API_NATIVE_FUNCTION(callee);
+
+			VMValue returnValue = NULL_VAL;
+			nativeFn(argCount, StackTop - argCount, this, &returnValue);
+
+			StackTop -= argCount; // Pop arguments
+			StackTop -= 1; // Pop receiver / class
+			Push(returnValue); // Push result
+
+			result = true;
+			break;
+		}
+#endif
+		default:
+			break;
+		}
+	}
+	Manager->Unlock();
+	return result;
+}
+bool VMThread::CallForObject(VMValue callee, int argCount) {
+	if (!IS_CALLABLE(callee)) {
+		ThrowRuntimeError(
+			false, "Cannot call value of type %s.", GetValueTypeString(callee));
+		return false;
+	}
+
+	if (Manager->Lock()) {
+		// Special case for native functions
+		if (OBJECT_TYPE(callee) == OBJ_NATIVE_FUNCTION) {
+			NativeFn nativeFn = AS_NATIVE_FUNCTION(callee);
+
+			VMValue returnValue = NULL_VAL;
+			try {
+				// Calling a native function for an object needs to correctly pass the receiver,
+				// which is the reason these +1 and -1 are here.
+				returnValue = nativeFn(argCount + 1, StackTop - argCount - 1, this);
+			} catch (const ScriptException& error) {
+				ThrowRuntimeError(false, "%s", error.what());
+			}
+
+			StackTop -= argCount; // Pop arguments
+			StackTop -= 1; // Pop receiver / class
+			Push(returnValue); // Push returned value
+
+			Manager->Unlock();
+			return true;
+		}
+#ifdef HSL_LIBRARY
+		else if (OBJECT_TYPE(callee) == OBJ_API_NATIVE_FUNCTION) {
+			APINativeFn nativeFn = AS_API_NATIVE_FUNCTION(callee);
+
+			VMValue returnValue = NULL_VAL;
+			nativeFn(argCount + 1, StackTop - argCount - 1, this, &returnValue);
+
+			StackTop -= argCount; // Pop arguments
+			StackTop -= 1; // Pop receiver / class
+			Push(returnValue); // Push returned value
+
+			Manager->Unlock();
+			return true;
+		}
+#endif
+
+		Manager->Unlock();
+		return CallValue(callee, argCount);
+	}
+	return false;
+}
+bool VMThread::InstantiateClass(VMValue callee, int argCount) {
+	if (!Manager->Lock()) {
+		return false;
+	}
+
+	if (!IS_OBJECT(callee) || OBJECT_TYPE(callee) != OBJ_CLASS) {
+		ThrowRuntimeError(false, "Cannot instantiate non-class.");
+		Manager->Unlock();
+		return false;
+	}
+
+	ObjClass* klass = AS_CLASS(callee);
+
+	// Create the instance.
+	Obj* instance;
+	if (klass->NewFn) {
+		try {
+			instance = klass->NewFn(this);
+		} catch (const ScriptException& error) {
+			ThrowRuntimeError(false, "%s", error.what());
+			Manager->Unlock();
+			return false;
+		}
+	}
+	else {
+		instance = (Obj*)Manager->NewInstance(klass);
+	}
+
+	if (instance == nullptr) {
+		StackTop[-argCount - 1] = NULL_VAL;
+		Manager->Unlock();
+		return false;
+	}
+
+	StackTop[-argCount - 1] = OBJECT_VAL(instance);
+
+	// Call the initializer, if there is one.
+	if (HasInitializer(klass)) {
+		// Handles native functions correctly!
+		Manager->Unlock();
+		return CallForObject(klass->Initializer, argCount);
+	}
+	else if (argCount != 0) {
+		ThrowRuntimeError(false, "Expected no arguments to initializer, got %d.", argCount);
+		Manager->Unlock();
+		return false;
+	}
+
+	Manager->Unlock();
+	return true;
+}
+bool VMThread::Call(ObjFunction* function, int argCount) {
+	if (function->MinArity < function->Arity) {
+		if (argCount < (int)function->MinArity) {
+			ThrowRuntimeError(false,
+				"Expected at least %d arguments to function call, got %d.",
+				(int)function->MinArity,
+				argCount);
+			return false;
+		}
+		else if (argCount > (int)function->Arity) {
+			ThrowRuntimeError(false,
+				"Expected at most %d arguments to function call, got %d.",
+				(int)function->Arity,
+				argCount);
+			return false;
+		}
+
+		if (argCount < (int)function->Arity) {
+			for (int i = argCount; i < (int)function->Arity; i++) {
+				Push(NULL_VAL);
+			}
+		}
+	}
+	else if (argCount != (int)function->Arity) {
+		ThrowRuntimeError(false,
+			"Expected %d arguments to function call, got %d.",
+			(int)function->Arity,
+			argCount);
+		return false;
+	}
+
+	if (FrameCount == FRAMES_MAX) {
+		ThrowRuntimeError(true, "Frame overflow. (Count %d / %d)", FrameCount, FRAMES_MAX);
+		return false;
+	}
+
+	CallFrame* frame = &Frames[FrameCount++];
+	frame->IP = function->Chunk.Code;
+	frame->IPStart = frame->IP;
+	frame->Function = function;
+	frame->Slots = StackTop - (function->Arity + 1);
+	frame->WithReceiverStackTop = frame->WithReceiverStack;
+	frame->WithIteratorStackTop = frame->WithIteratorStack;
+	frame->Module = function->Module;
+	frame->ModuleLocals = function->Module->Locals;
+
+#ifdef VM_DEBUG
+	frame->BranchCount = 0;
+#endif
+
+#if USING_VM_FUNCPTRS
+	frame->OpcodeFunctions = function->Chunk.OpcodeFuncs;
+	frame->OpcodeFStart = frame->OpcodeFunctions;
+	frame->IPToOpcode = function->Chunk.IPToOpcode;
+#endif
+	return true;
+}
+bool VMThread::InvokeFromClass(ObjClass* klass, Uint32 hash, int argCount) {
+	if (Manager->Lock()) {
+		VMValue method;
+		if (klass->Methods->GetIfExists(hash, &method)) {
+			// Found the method, so just call it
+			return CallForObject(method, argCount);
+		}
+		else {
+			// If there is a parent class, walk up the
+			// inheritance chain until we find the method.
+			ObjClass* parentClass = klass->Parent;
+			if (parentClass) {
+				Manager->Unlock();
+				return InvokeFromClass(parentClass, hash, argCount);
+			}
+		}
+		Manager->Unlock();
+	}
+	return false;
+}
+bool VMThread::InvokeForInstance(ObjInstance* instance,
+	ObjClass* klass,
+	Uint32 hash,
+	int argCount) {
+	VMValue callable;
+
+	if (!Manager->Lock()) {
+		return false;
+	}
+
+	// Look for a field in the instance which may shadow a method.
+	if (instance->Fields->GetIfExists(hash, &callable)) {
+		Manager->Unlock();
+		return CallForObject(callable, argCount);
+	}
+
+	// There is no field with that name, so look for methods in the class.
+	if (klass->Methods->GetIfExists(hash, &callable)) {
+		Manager->Unlock();
+		return CallForObject(callable, argCount);
+	}
+
+	// No method found, so look in the parent class.
+	// Walk up the inheritance chain and get the expected method.
+	ObjClass* parentClass = Manager->GetClassParent((Obj*)instance, klass);
+	if (Manager->GetClassMethod((Obj*)instance, parentClass, hash, &callable)) {
+		Manager->Unlock();
+
+		// Call it, finally.
+		return CallForObject(callable, argCount);
+	}
+
+	Manager->Unlock();
+
+	return false;
+}
+bool VMThread::DoClassExtension(VMValue value, VMValue originalValue, bool clearSrc) {
+	ObjClass* src = AS_CLASS(value);
+	ObjClass* dst = AS_CLASS(originalValue);
+
+	src->Methods->WithAll([dst](Uint32 hash, VMValue value) -> void {
+		dst->Methods->Put(hash, value);
+	});
+	if (clearSrc) {
+		src->Methods->Clear();
+	}
+
+	src->Fields->WithAll([dst](Uint32 hash, VMValue value) -> void {
+		dst->Fields->Put(hash, value);
+	});
+	if (clearSrc) {
+		src->Fields->Clear();
+	}
+
+	// If the class doing the extension has a superclass, and the class being extended doesn't have
+	// a parent yet, then set the parent of the class being extended to that superclass.
+	if (src->Parent != nullptr) {
+		if (dst->Parent != nullptr) {
+			ThrowRuntimeError(false, "Class \"%s\" already has a parent!", dst->Name);
+		}
+		else {
+			dst->Parent = src->Parent;
+		}
+	}
+
+	return true;
+}
+bool VMThread::Import(VMValue value) {
+	bool result = false;
+	if (Manager->Lock()) {
+		if (!IS_OBJECT(value) || OBJECT_TYPE(value) != OBJ_STRING) {
+			ThrowRuntimeError(
+				false, "Cannot import from a %s.", GetValueTypeString(value));
+		}
+		else {
+			char* className = AS_CSTRING(value);
+			if (Manager->ClassExists(className)) {
+				result = Manager->LoadObjectClass(this, className);
+			}
+			else {
+				Manager->Unlock();
+#ifdef HSL_LIBRARY
+				ThrowRuntimeError(
+					false, "Could not import \"%s\"!", className);
+#else
+				return ImportModule(value);
+#endif
+			}
+		}
+	}
+	Manager->Unlock();
+	return result;
+}
+bool VMThread::ImportModule(VMValue value) {
+	bool result = false;
+	if (Manager->Lock()) {
+		if (!IS_OBJECT(value) || OBJECT_TYPE(value) != OBJ_STRING) {
+			ThrowRuntimeError(
+				false, "Cannot import from a %s.", GetValueTypeString(value));
+		}
+		else {
+			char* scriptName = AS_CSTRING(value);
+			if (Manager->LoadScript(this, scriptName)) {
+				result = true;
+			}
+			else {
+#ifdef HSL_LIBRARY
+				ThrowRuntimeError(
+					false, "Could not import \"%s\"!", scriptName);
+#else
+				Log::Print(Log::LOG_ERROR, "Could not import \"%s\"!", scriptName);
+#endif
+			}
+		}
+	}
+	Manager->Unlock();
+	return result;
+}
+
+// #region Value Operations
+#define CHECK_IS_NUM(a, b, def) \
+	if (IS_NOT_NUMBER(a)) { \
+		ThrowRuntimeError(false, \
+			"Cannot perform %s operation on non-number value of type %s.", \
+			#b, \
+			GetValueTypeString(a)); \
+		a = def; \
+	}
+
+// If one of the operators is a decimal, they both become one
+
+VMValue VMThread::Values_Multiply() {
+	VMValue b = Peek(0);
+	VMValue a = Peek(1);
+
+	CHECK_IS_NUM(a, "multiply", DECIMAL_VAL(0.0f));
+	CHECK_IS_NUM(b, "multiply", DECIMAL_VAL(0.0f));
+
+	Pop();
+	Pop();
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return DECIMAL_VAL(a_d * b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d * b_d);
+}
+VMValue VMThread::Values_Division() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "division", DECIMAL_VAL(1.0f));
+	CHECK_IS_NUM(b, "division", DECIMAL_VAL(1.0f));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		if (b_d == 0.0) {
+			if (ThrowRuntimeError(false, "Cannot divide decimal by zero.") ==
+				ERROR_RES_CONTINUE) {
+				return DECIMAL_VAL(0.f);
+			}
+		}
+		return DECIMAL_VAL(a_d / b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	if (b_d == 0) {
+		if (ThrowRuntimeError(false, "Cannot divide integer by zero.") ==
+			ERROR_RES_CONTINUE) {
+			return INTEGER_VAL(0);
+		}
+	}
+	return INTEGER_VAL(a_d / b_d);
+}
+VMValue VMThread::Values_Modulo() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "modulo", DECIMAL_VAL(1.0f));
+	CHECK_IS_NUM(b, "modulo", DECIMAL_VAL(1.0f));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return DECIMAL_VAL(fmod(a_d, b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d % b_d);
+}
+VMValue VMThread::Values_Plus() {
+	VMValue b = Peek(0);
+	VMValue a = Peek(1);
+	if (IS_STRING(a) || IS_STRING(b)) {
+		if (Manager->Lock()) {
+			VMValue str_b = Manager->CastValueAsString(b);
+			VMValue str_a = Manager->CastValueAsString(a);
+			VMValue out = Manager->ConcatenateValues(str_a, str_b);
+			Pop();
+			Pop();
+			Manager->Unlock();
+			return out;
+		}
+	}
+
+	CHECK_IS_NUM(a, "plus", DECIMAL_VAL(0.0f));
+	CHECK_IS_NUM(b, "plus", DECIMAL_VAL(0.0f));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		Pop();
+		Pop();
+		return DECIMAL_VAL(a_d + b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	Pop();
+	Pop();
+	return INTEGER_VAL(a_d + b_d);
+}
+VMValue VMThread::Values_Minus() {
+	VMValue b = Peek(0);
+	VMValue a = Peek(1);
+
+	CHECK_IS_NUM(a, "minus", DECIMAL_VAL(0.0f));
+	CHECK_IS_NUM(b, "minus", DECIMAL_VAL(0.0f));
+
+	Pop();
+	Pop();
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return DECIMAL_VAL(a_d - b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d - b_d);
+}
+VMValue VMThread::Values_BitwiseLeft() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "bitwise left", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "bitwise left", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		int a_d = AS_INTEGER(Value::CastAsInteger(a));
+		int b_d = AS_INTEGER(Value::CastAsInteger(b));
+		return DECIMAL_VAL((float)(a_d << b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d << b_d);
+}
+VMValue VMThread::Values_BitwiseRight() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "bitwise right", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "bitwise right", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		int a_d = AS_INTEGER(Value::CastAsInteger(a));
+		int b_d = AS_INTEGER(Value::CastAsInteger(b));
+		return DECIMAL_VAL((float)(a_d >> b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d >> b_d);
+}
+VMValue VMThread::Values_BitwiseAnd() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "bitwise and", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "bitwise and", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		int a_d = AS_INTEGER(Value::CastAsInteger(a));
+		int b_d = AS_INTEGER(Value::CastAsInteger(b));
+		return DECIMAL_VAL((float)(a_d & b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d & b_d);
+}
+VMValue VMThread::Values_BitwiseXor() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "xor", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "xor", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		int a_d = AS_INTEGER(Value::CastAsInteger(a));
+		int b_d = AS_INTEGER(Value::CastAsInteger(b));
+		return DECIMAL_VAL((float)(a_d ^ b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d ^ b_d);
+}
+VMValue VMThread::Values_BitwiseOr() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "bitwise or", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "bitwise or", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		int a_d = AS_INTEGER(Value::CastAsInteger(a));
+		int b_d = AS_INTEGER(Value::CastAsInteger(b));
+		return DECIMAL_VAL((float)(a_d | b_d));
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d | b_d);
+}
+VMValue VMThread::Values_LogicalAND() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "logical and", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "logical and", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		return INTEGER_VAL(0);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d && b_d);
+}
+VMValue VMThread::Values_LogicalOR() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "logical or", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "logical or", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		return INTEGER_VAL(0);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d || b_d);
+}
+VMValue VMThread::Values_LessThan() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "less than", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "less than", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return INTEGER_VAL(a_d < b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d < b_d);
+}
+VMValue VMThread::Values_GreaterThan() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "greater than", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "greater than", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return INTEGER_VAL(a_d > b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d > b_d);
+}
+VMValue VMThread::Values_LessThanOrEqual() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "less than or equal", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "less than or equal", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return INTEGER_VAL(a_d <= b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d <= b_d);
+}
+VMValue VMThread::Values_GreaterThanOrEqual() {
+	VMValue b = Pop();
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "greater than or equal", INTEGER_VAL(0));
+	CHECK_IS_NUM(b, "greater than or equal", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL || b.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
+		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
+		return INTEGER_VAL(a_d >= b_d);
+	}
+	int a_d = AS_INTEGER(a);
+	int b_d = AS_INTEGER(b);
+	return INTEGER_VAL(a_d >= b_d);
+}
+VMValue VMThread::Values_Increment() {
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "increment", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(a);
+		return DECIMAL_VAL(++a_d);
+	}
+	int a_d = AS_INTEGER(a);
+	return INTEGER_VAL(++a_d);
+}
+VMValue VMThread::Values_Decrement() {
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "decrement", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL) {
+		float a_d = AS_DECIMAL(a);
+		return DECIMAL_VAL(--a_d);
+	}
+	int a_d = AS_INTEGER(a);
+	return INTEGER_VAL(--a_d);
+}
+VMValue VMThread::Values_Negate() {
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "negate", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL) {
+		return DECIMAL_VAL(-AS_DECIMAL(a));
+	}
+	return INTEGER_VAL(-AS_INTEGER(a));
+}
+VMValue VMThread::Values_LogicalNOT() {
+	VMValue a = Pop();
+
+	// HACK: Yikes.
+	switch (a.Type) {
+	case VAL_NULL:
+		return INTEGER_VAL(true);
+	case VAL_OBJECT:
+		return INTEGER_VAL(false);
+	case VAL_DECIMAL:
+	case VAL_LINKED_DECIMAL:
+		return DECIMAL_VAL((float)(AS_DECIMAL(a) == 0.0));
+	case VAL_INTEGER:
+	case VAL_LINKED_INTEGER:
+		return INTEGER_VAL(!AS_INTEGER(a));
+	}
+
+	return INTEGER_VAL(false);
+}
+VMValue VMThread::Values_BitwiseNOT() {
+	VMValue a = Pop();
+
+	CHECK_IS_NUM(a, "bitwise NOT", INTEGER_VAL(0));
+
+	if (a.Type == VAL_DECIMAL) {
+		return DECIMAL_VAL((float)(~(int)AS_DECIMAL(a)));
+	}
+	return INTEGER_VAL(~AS_INTEGER(a));
+}
+static const char* GetTypeOfValue(VMValue value) {
+	switch (value.Type) {
+	case VAL_NULL:
+		return "null";
+	case VAL_INTEGER:
+	case VAL_LINKED_INTEGER:
+		return "integer";
+	case VAL_DECIMAL:
+	case VAL_LINKED_DECIMAL:
+		return "decimal";
+	case VAL_HITBOX:
+		return "hitbox";
+	case VAL_OBJECT:
+		switch (OBJECT_TYPE(value)) {
+		case OBJ_FUNCTION:
+		case OBJ_BOUND_METHOD:
+			return "function";
+		case OBJ_CLASS:
+			return "class";
+		case OBJ_CLOSURE:
+			return "closure";
+		case OBJ_NATIVE_FUNCTION:
+		case OBJ_API_NATIVE_FUNCTION:
+			return "native function";
+		case OBJ_STRING:
+			return "string";
+		case OBJ_UPVALUE:
+			return "upvalue";
+		case OBJ_ARRAY:
+			return "array";
+		case OBJ_MAP:
+			return "map";
+		case OBJ_NAMESPACE:
+			return "namespace";
+		case OBJ_ENUM:
+			return "enum";
+		case OBJ_MODULE:
+			return "module";
+		default:
+			if (IS_INSTANCEABLE(value)) {
+				return "instance";
+			}
+		}
+	}
+
+	return "unknown";
+}
+VMValue VMThread::Value_TypeOf() {
+	VMValue value = Pop();
+
+	const char* valueType = GetTypeOfValue(value);
+
+	return OBJECT_VAL(Manager->CopyString(valueType));
+}
+// #endregion
+
+bool VMThread::DoIntegerConversion(VMValue& value) {
+	VMValue result = Value::CastAsInteger(value);
+	if (IS_NULL(result)) {
+		// Conversion failed
+		ThrowRuntimeError(false,
+			"Expected value to be of type %s; value was of type %s.",
+			GetTypeString(VAL_INTEGER),
+			GetValueTypeString(value));
+		return false;
+	}
+	value = result;
+	return true;
+}
+bool VMThread::DoDecimalConversion(VMValue& value) {
+	VMValue result = Value::CastAsDecimal(value);
+	if (IS_NULL(result)) {
+		// Conversion failed
+		ThrowRuntimeError(false,
+			"Expected value to be of type %s; value was of type %s.",
+			GetTypeString(VAL_DECIMAL),
+			GetValueTypeString(value));
+		return false;
+	}
+	value = result;
+	return true;
+}

@@ -1,0 +1,13 @@
+#ifndef HASHING_COMBINEDHASH_H
+#define HASHING_COMBINEDHASH_H
+
+#include <Includes/Standard.h>
+
+class CombinedHash {
+public:
+	static Uint32 EncryptString(char* data);
+	static Uint32 EncryptString(const char* message);
+	static Uint32 EncryptData(const void* message, size_t len);
+};
+
+#endif /* HASHING_COMBINEDHASH_H */

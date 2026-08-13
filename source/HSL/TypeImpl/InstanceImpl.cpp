@@ -1,0 +1,25 @@
+#include <HSL/ScriptManager.h>
+#include <HSL/TypeImpl/InstanceImpl.h>
+#include <HSL/TypeImpl/TypeImpl.h>
+
+InstanceImpl::InstanceImpl(ScriptManager* manager) {
+	Manager = manager;
+	Class = Manager->NewClass(CLASS_INSTANCE);
+
+	TypeImpl::RegisterClass(manager, Class);
+}
+
+Obj* InstanceImpl::New(size_t size, ObjType type) {
+	ObjInstance* instance = (ObjInstance*)Manager->AllocateObject(size, type);
+	Memory::Track(instance, "NewInstance");
+	instance->Fields = new Table(NULL, 16);
+	instance->Destructor = Dispose;
+	return (Obj*)instance;
+}
+
+void InstanceImpl::Dispose(Obj* object) {
+	ObjInstance* instance = (ObjInstance*)object;
+
+	// An instance does not own its values, so it's not allowed to free them.
+	delete instance->Fields;
+}
