@@ -19,6 +19,8 @@ public:
 
 	static bool ToNumber(int* dst, const char* src);
 	static bool ToDecimal(double* dst, const char* src);
+
+	static std::string FromCodepoint(Uint32 codepoint);
 };
 
 #endif /* UTILITIES_STRINGUTILS_H */

@@ -115,3 +115,34 @@ bool StringUtils::WildcardMatch(const char* first, const char* second) {
 	}
 	return false;
 }
+
+// Converts an UCS codepoint to an UTF-8 string
+// Throws an exception if it encounters an invalid codepoint.
+std::string StringUtils::FromCodepoint(Uint32 codepoint) {
+	std::string result;
+	result.reserve(4);
+
+	if (codepoint <= 0x7F) {
+		result += (char)codepoint;
+	}
+	else if (codepoint <= 0x7FF) {
+		result += (char)(0xC0 | (codepoint >> 6));
+		result += (char)(0x80 | (codepoint & 0x3F));
+	}
+	else if (codepoint <= 0xFFFF) {
+		result += (char)(0xE0 | (codepoint >> 12));
+		result += (char)(0x80 | ((codepoint >> 6) & 0x3F));
+		result += (char)(0x80 | (codepoint & 0x3F));
+	}
+	else if (codepoint <= 0x10FFFF) {
+		result += (char)(0xF0 | (codepoint >> 18));
+		result += (char)(0x80 | ((codepoint >> 12) & 0x3F));
+		result += (char)(0x80 | ((codepoint >> 6) & 0x3F));
+		result += (char)(0x80 | (codepoint & 0x3F));
+	}
+	else {
+		throw std::runtime_error("Invalid UCS codepoint encountered!");
+	}
+
+	return result;
+}
