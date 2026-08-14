@@ -185,6 +185,8 @@ public:
 
 #ifdef HSL_VM
 	static VMValue VM_GetClass(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_GetField(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_SetField(int argCount, VMValue* args, VMThread* thread);
 #endif
 
 	Obj* AllocateObject(size_t size, ObjType type);

@@ -2378,6 +2378,41 @@ void VMThread::CallInitializer(VMValue value) {
 	FunctionToInvoke = NULL_VAL;
 }
 
+bool VMThread::HasProperty(VMValue object, Uint32 hash) {
+
+	if (IS_INSTANCEABLE(object)) {
+		ObjInstance* instance = AS_INSTANCE(object);
+
+		if (Manager->Lock()) {
+			// Fields have priority over methods
+			if (instance->Fields->Exists(hash)) {
+				Manager->Unlock();
+				return true;
+			}
+
+			ObjClass* klass = instance->Object.Class;
+
+			Manager->Unlock();
+			return HasProperty((Obj*)instance,
+				klass,
+				hash,
+				false,
+				instance->PropertyGet);
+		}
+	}
+	else if (IS_CLASS(object)) {
+		ObjClass* klass = AS_CLASS(object);
+
+		return HasProperty(klass, hash);
+	}
+	if (IS_OBJECT(object) && AS_OBJECT(object)->Class) {
+		Obj* objPtr = AS_OBJECT(object);
+
+		return HasProperty(objPtr, objPtr->Class, hash, false, objPtr->Class->PropertyGet);
+	}
+
+	return false;
+}
 VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 	VMValue result;
 

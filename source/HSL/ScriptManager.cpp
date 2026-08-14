@@ -1414,6 +1414,28 @@ VMValue ScriptManager::VM_GetClass(int argCount, VMValue* args, VMThread* thread
 
 	return NULL_VAL;
 }
+
+VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread) {
+	CheckArgCount(argCount, 2, thread);
+
+	const char* name = thread->Manager->GetString(args, 1, thread);
+	Uint32 hash = Murmur::EncryptString(name);
+
+	if (thread->HasProperty(args[0], hash))
+		return thread->GetProperty(args[0], hash);
+
+	thread->ThrowRuntimeError(false, "Could not find %s in %s!", name, GetValueTypeString(args[0]));
+	return NULL_VAL;
+}
+
+VMValue ScriptManager::VM_SetField(int argCount, VMValue* args, VMThread* thread) {
+	CheckArgCount(argCount, 3, thread);
+
+	const char* name = thread->Manager->GetString(args, 1, thread);
+	Uint32 hash = Murmur::EncryptString(name);
+
+	return thread->SetProperty(args[0], hash, args[2]);;
+}
 #endif
 
 ObjFunction* ScriptManager::NewFunction() {
@@ -1463,6 +1485,8 @@ ObjClass* ScriptManager::NewClass(Uint32 hash) {
 	klass->Name = StringUtils::Create(GetClassName(hash));
 #ifdef HSL_VM
 	DefineNative(klass, "GetClass", VM_GetClass);
+	DefineNative(klass, "GetField", VM_GetField);
+	DefineNative(klass, "SetField", VM_SetField);
 #endif
 	return klass;
 }
