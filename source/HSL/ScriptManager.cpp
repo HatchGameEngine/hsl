@@ -308,6 +308,11 @@ void ScriptManager::FreeNamespace(Obj* object) {
 
 	delete ns->Fields;
 }
+void ScriptManager::FreeBoundMethod(Obj* object) {
+	ObjBoundMethod* boundMethod = (ObjBoundMethod*)object;
+
+	Memory::Free(boundMethod->Arguments);
+}
 #ifdef HSL_VM
 void ScriptManager::RemoveTemporaryModules() {
 	for (size_t i = 0; i < TempModuleList.size(); i++) {
@@ -388,6 +393,9 @@ void ScriptManager::DestroyObject(Obj* object) {
 		break;
 	case OBJ_ENUM:
 		FreeEnumeration(object);
+		break;
+	case OBJ_BOUND_METHOD:
+		FreeBoundMethod(object);
 		break;
 	case OBJ_INSTANCE:
 	case OBJ_NATIVE_INSTANCE:
@@ -1469,11 +1477,13 @@ ObjInstance* ScriptManager::NewInstance(ObjClass* klass) {
 	instance->Object.Class = klass;
 	return instance;
 }
-ObjBoundMethod* ScriptManager::NewBoundMethod(VMValue receiver, ObjFunction* method) {
+ObjBoundMethod* ScriptManager::NewBoundMethod(ObjFunction* method, VMValue* args, Uint8 argCount) {
 	ObjBoundMethod* bound = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD);
 	Memory::Track(bound, "NewBoundMethod");
-	bound->Receiver = receiver;
 	bound->Method = method;
+	bound->Arguments = (VMValue*)Memory::Malloc(argCount * sizeof(VMValue));
+	bound->ArgumentCount = argCount;
+	memcpy(bound->Arguments, args, argCount * sizeof(VMValue));
 	return bound;
 }
 ObjArray* ScriptManager::NewArray() {

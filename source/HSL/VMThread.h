@@ -35,7 +35,6 @@ private:
 	bool HasProperty(ObjClass* klass, Uint32 hash, bool checkFields);
 	bool HasProperty(ObjClass* klass, Uint32 hash);
 	bool SetProperty(Table* fields, Uint32 hash, VMValue field, VMValue value);
-	bool BindMethod(VMValue receiver, VMValue method);
 	bool CallBoundMethod(ObjBoundMethod* bound, int argCount);
 	bool InstantiateClass(VMValue callee, int argCount);
 	bool DoClassExtension(VMValue value, VMValue originalValue, bool clearSrc);

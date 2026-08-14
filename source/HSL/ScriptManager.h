@@ -98,6 +98,7 @@ public:
 	void FreeClass(Obj* object);
 	void FreeEnumeration(Obj* object);
 	void FreeNamespace(Obj* object);
+	void FreeBoundMethod(Obj* object);
 #ifdef HSL_VM
 	void RemoveTemporaryModules();
 	void RequestGarbageCollection(bool doLog);
@@ -203,7 +204,7 @@ public:
 	ObjClass* NewClass(Uint32 hash);
 	ObjClass* NewClass(const char* className);
 	ObjInstance* NewInstance(ObjClass* klass);
-	ObjBoundMethod* NewBoundMethod(VMValue receiver, ObjFunction* method);
+	ObjBoundMethod* NewBoundMethod(ObjFunction* method, VMValue* args, Uint8 argCount);
 	ObjArray* NewArray();
 	ObjMap* NewMap();
 	ObjNamespace* NewNamespace(Uint32 hash);

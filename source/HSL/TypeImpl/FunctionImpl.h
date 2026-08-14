@@ -14,6 +14,7 @@ public:
 
 #ifdef HSL_VM
 	static VMValue VM_Bind(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_BindArguments(int argCount, VMValue* args, VMThread* thread);
 #endif
 };
 

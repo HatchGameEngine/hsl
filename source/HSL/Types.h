@@ -436,8 +436,10 @@ struct ObjInstance {
 };
 struct ObjBoundMethod {
 	Obj Object;
-	VMValue Receiver;
 	ObjFunction* Method;
+	VMValue* Arguments;
+	Uint8 ArgumentCount;
+	bool HasReceiver;
 };
 struct ObjArray {
 	Obj Object;
