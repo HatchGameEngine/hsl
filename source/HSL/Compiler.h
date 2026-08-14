@@ -49,6 +49,7 @@ public:
 	bool IsAlpha(char c);
 	bool IsIdentifierStart(char c);
 	bool IsIdentifierBody(char c);
+	bool IsDot(char c);
 	bool MatchChar(char expected);
 	char AdvanceChar();
 	char PrevChar();
