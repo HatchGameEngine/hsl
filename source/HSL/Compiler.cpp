@@ -823,6 +823,9 @@ void Compiler::ErrorAtCurrent(const char* message) {
 void Compiler::Warning(const char* message) {
 	ErrorAt(&parser.Current, message, false);
 }
+void Compiler::WarningAt(Token* token, const char* message) {
+	ErrorAt(token, message, false);
+}
 void Compiler::WarningInFunction(const char* format, ...) {
 	if (!CurrentSettings.ShowWarnings) {
 		return;
@@ -4074,6 +4077,7 @@ int Compiler::CheckInfixOptimize(int preCount, int preConstant, ParseFn fn) {
 				float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
 
 				if (b_d == 0) {
+					WarningAt(&parser.Previous, "Division by zero will raise a runtime error!");
 					return preConstant;
 				}
 				out = DECIMAL_VAL(a_d / b_d);
@@ -4082,6 +4086,7 @@ int Compiler::CheckInfixOptimize(int preCount, int preConstant, ParseFn fn) {
 				int a_d = AS_INTEGER(a);
 				int b_d = AS_INTEGER(b);
 				if (b_d == 0) {
+					WarningAt(&parser.Previous, "Division by zero will raise a runtime error!");
 					return preConstant;
 				}
 
@@ -4100,6 +4105,7 @@ int Compiler::CheckInfixOptimize(int preCount, int preConstant, ParseFn fn) {
 				float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
 
 				if (b_d == 0) {
+					WarningAt(&parser.Previous, "Modulo by zero will raise a runtime error!");
 					return preConstant;
 				}
 				out = DECIMAL_VAL(fmod(a_d, b_d));
@@ -4108,6 +4114,7 @@ int Compiler::CheckInfixOptimize(int preCount, int preConstant, ParseFn fn) {
 				int a_d = AS_INTEGER(a);
 				int b_d = AS_INTEGER(b);
 				if (b_d == 0) {
+					WarningAt(&parser.Previous, "Modulo by zero will raise a runtime error!");
 					return preConstant;
 				}
 
