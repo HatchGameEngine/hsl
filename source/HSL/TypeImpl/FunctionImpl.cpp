@@ -4,14 +4,22 @@
 
 FunctionImpl::FunctionImpl(ScriptManager* manager) {
 	Manager = manager;
-	Class = Manager->NewClass(CLASS_FUNCTION);
+	Class = Manager->NewClass("Function");
+	Class->NewFn = Constructor;
 
 #ifdef HSL_VM
+	Manager->DefineNative(Class, "Bind", VM_Bind);
 	Manager->DefineNative(Class, "bind", VM_Bind);
 	Manager->DefineNative(Class, "bindArguments", VM_BindArguments);
 #endif
 
 	TypeImpl::RegisterClass(manager, Class);
+	TypeImpl::ExposeClass(manager, Class);
+}
+
+Obj* FunctionImpl::Constructor(VMThread* thread) {
+	throw ScriptException("Cannot directly construct Function!");
+	return nullptr;
 }
 
 Obj* FunctionImpl::New() {
@@ -25,6 +33,14 @@ Obj* FunctionImpl::New() {
 #ifdef HSL_VM
 #define GET_ARG(argIndex, argFunction) (thread->Manager->argFunction(args, argIndex, thread))
 
+/***
+ * \method Bind
+ * \desc Binds a receiver, and optionally arguments, to a method.
+ * \param receiver (value): The receiver to bind.
+ * \paramOpt ... (varargs): The arguments to bind.
+ * \return <ref BoundMethod> Returns a bound method.
+ * \ns Function
+ */
 VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
 	if (argCount < 1) {
 		ScriptManager::CheckAtLeastArgCount(argCount, 1, thread);
@@ -53,6 +69,13 @@ VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
 	return OBJECT_VAL(bound);
 }
 
+/***
+ * \method BindArguments
+ * \desc Binds arguments to a method.
+ * \param ... (varargs): The arguments to bind.
+ * \return <ref BoundMethod> Returns a bound method.
+ * \ns Function
+ */
 VMValue FunctionImpl::VM_BindArguments(int argCount, VMValue* args, VMThread* thread) {
 	if (argCount < 1) {
 		ScriptManager::CheckAtLeastArgCount(argCount, 1, thread);

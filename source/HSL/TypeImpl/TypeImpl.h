@@ -18,10 +18,7 @@ public:
 	static void Dispose();
 
 	static void RegisterClass(ScriptManager* manager, ObjClass* klass);
-	static void ExposeClass(ScriptManager* manager, const char* name, ObjClass* klass);
-
-	static void DefinePrintableName(ObjClass* klass, const char* name);
-	static const char* GetPrintableName(ObjClass* klass);
+	static void ExposeClass(ScriptManager* manager, ObjClass* klass);
 };
 
 #endif /* HSL_TYPEIMPL_TYPEIMPL_H */

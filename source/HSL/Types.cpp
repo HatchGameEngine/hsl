@@ -38,7 +38,11 @@ const char* GetTypeString(Uint32 type) {
 	return "unknown type";
 }
 const char* GetObjectTypeString(Uint32 type) {
-	return Value::GetObjectTypeName(type);
+	const char* typeString = Value::GetObjectTypeName(type);
+	if (typeString) {
+		return typeString;
+	}
+	return "unknown object type";
 }
 const char* GetValueTypeString(VMValue value) {
 	if (value.Type == VAL_OBJECT) {

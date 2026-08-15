@@ -10,12 +10,14 @@ class MapImpl : public TypeImpl {
 public:
 	MapImpl(ScriptManager* manager);
 
-	Obj* New();
+	Obj* Allocate();
+	static Obj* Constructor(VMThread* thread);
 	static void Dispose(Obj* object);
 
 #ifdef HSL_VM
+	static VMValue VM_Length(int argCount, VMValue* args, VMThread* thread);
 	static VMValue VM_GetKeys(int argCount, VMValue* args, VMThread* thread);
-	static VMValue VM_RemoveKey(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_Remove(int argCount, VMValue* args, VMThread* thread);
 	static VMValue VM_Iterate(int argCount, VMValue* args, VMThread* thread);
 	static VMValue VM_IteratorValue(int argCount, VMValue* args, VMThread* thread);
 #endif

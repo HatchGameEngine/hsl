@@ -2,14 +2,25 @@
 #include <HSL/TypeImpl/StringImpl.h>
 #include <HSL/TypeImpl/TypeImpl.h>
 
+/***
+* \class String
+* \desc A sequence of characters. All string literals are instances of String.
+*/
+
 StringImpl::StringImpl(ScriptManager* manager) {
 	Manager = manager;
-	Class = Manager->NewClass(CLASS_STRING);
+	Class = Manager->NewClass("String");
+	Class->NewFn = Constructor;
 #ifdef HSL_VM
 	Class->ElementGet = VM_ElementGet;
 #endif
 
 	TypeImpl::RegisterClass(manager, Class);
+}
+
+Obj* StringImpl::Constructor(VMThread* thread) {
+	throw ScriptException("Cannot directly construct String!");
+	return nullptr;
 }
 
 Obj* StringImpl::New(char* chars, size_t length) {

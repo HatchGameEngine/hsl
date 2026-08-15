@@ -4,9 +4,6 @@
 
 InstanceImpl::InstanceImpl(ScriptManager* manager) {
 	Manager = manager;
-	Class = Manager->NewClass(CLASS_INSTANCE);
-
-	TypeImpl::RegisterClass(manager, Class);
 }
 
 Obj* InstanceImpl::New(size_t size, ObjType type) {

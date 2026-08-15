@@ -10,6 +10,7 @@ class FunctionImpl : public TypeImpl {
 public:
 	FunctionImpl(ScriptManager* manager);
 
+	static Obj* Constructor(VMThread* thread);
 	Obj* New();
 
 #ifdef HSL_VM

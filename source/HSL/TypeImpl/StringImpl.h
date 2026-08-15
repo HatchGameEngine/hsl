@@ -10,6 +10,7 @@ class StringImpl : public TypeImpl {
 public:
 	StringImpl(ScriptManager* manager);
 
+	static Obj* Constructor(VMThread* thread);
 	Obj* New(char* chars, size_t length);
 	static void Dispose(Obj* object);
 

@@ -1558,10 +1558,10 @@ ObjBoundMethod* ScriptManager::NewBoundMethod(ObjFunction* method, VMValue* args
 	return bound;
 }
 ObjArray* ScriptManager::NewArray() {
-	return (ObjArray*)ImplArray->New();
+	return (ObjArray*)ImplArray->Allocate();
 }
 ObjMap* ScriptManager::NewMap() {
-	return (ObjMap*)ImplMap->New();
+	return (ObjMap*)ImplMap->Allocate();
 }
 ObjNamespace* ScriptManager::NewNamespace(Uint32 hash) {
 	ObjNamespace* ns = ALLOCATE_OBJ(ObjNamespace, OBJ_NAMESPACE);

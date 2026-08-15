@@ -2,13 +2,22 @@
 #include <HSL/TypeImpl/MapImpl.h>
 #include <HSL/TypeImpl/TypeImpl.h>
 
+/***
+* \class Map
+* \desc An associative array, also known as a dictionary, or a map.
+*/
+
 MapImpl::MapImpl(ScriptManager* manager) {
 	Manager = manager;
-	Class = Manager->NewClass(CLASS_MAP);
+	Class = Manager->NewClass("Map");
+	Class->NewFn = Constructor;
 
 #ifdef HSL_VM
+	Manager->DefineNative(Class, "Length", MapImpl::VM_Length);
+	Manager->DefineNative(Class, "GetKeys", MapImpl::VM_GetKeys);
 	Manager->DefineNative(Class, "keys", VM_GetKeys);
-	Manager->DefineNative(Class, "remove", VM_RemoveKey);
+	Manager->DefineNative(Class, "Remove", VM_Remove);
+	Manager->DefineNative(Class, "remove", VM_Remove);
 	Manager->DefineNative(Class, "iterate", VM_Iterate);
 	Manager->DefineNative(Class, "iteratorValue", VM_IteratorValue);
 #endif
@@ -16,13 +25,22 @@ MapImpl::MapImpl(ScriptManager* manager) {
 	TypeImpl::RegisterClass(manager, Class);
 }
 
-Obj* MapImpl::New() {
+Obj* MapImpl::Allocate() {
 	ObjMap* map = (ObjMap*)Manager->AllocateObject(sizeof(ObjMap), OBJ_MAP);
 	Memory::Track(map, "NewMap");
 	map->Object.Class = Class;
 	map->Values = new OrderedHashMap<VMValue>(NULL, 4);
 	map->Keys = new OrderedHashMap<char*>(NULL, 4);
 	return (Obj*)map;
+}
+
+/***
+ * \constructor
+ * \desc Creates a map.
+ * \ns Map
+ */
+Obj* MapImpl::Constructor(VMThread* thread) {
+	return thread->Manager->ImplMap->Allocate();
 }
 
 void MapImpl::Dispose(Obj* object) {
@@ -43,6 +61,26 @@ void MapImpl::Dispose(Obj* object) {
 #ifdef HSL_VM
 #define GET_ARG(argIndex, argFunction) (thread->Manager->argFunction(args, argIndex, thread))
 
+/***
+ * \method Length
+ * \desc Get the number of items in the map.
+ * \return integer Returns an integer value.
+ * \ns Map
+ */
+VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
+	ScriptManager::CheckArgCount(argCount, 1, thread);
+
+	ObjMap* map = GET_ARG(0, GetMap);
+
+	return INTEGER_VAL((int)map->Keys->Count());
+}
+
+/***
+ * \method GetKeys
+ * \desc Gets a list of all keys in the map.
+ * \return array Returns an array of strings.
+ * \ns Map
+ */
 VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 	ScriptManager::CheckArgCount(argCount, 1, thread);
 
@@ -57,7 +95,13 @@ VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 	return OBJECT_VAL(array);
 }
 
-VMValue MapImpl::VM_RemoveKey(int argCount, VMValue* args, VMThread* thread) {
+/***
+ * \method Remove
+ * \desc Removes a key from the map.
+ * \param key (string): The key to remove.
+ * \ns Map
+ */
+VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
 	ScriptManager::CheckArgCount(argCount, 2, thread);
 
 	ObjMap* map = GET_ARG(0, GetMap);

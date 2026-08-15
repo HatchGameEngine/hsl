@@ -5,13 +5,23 @@
 #include <HSL/Types.h>
 #include <IO/Stream.h>
 
+/***
+* \class Stream
+* \desc An abstraction of a continuous sequence of data.
+Use <ref Stream.FromResource> or <ref Stream.FromFile> to open a stream.
+*/
+
 StreamImpl::StreamImpl(ScriptManager* manager) {
 	Manager = manager;
 	Class = Manager->NewClass(CLASS_STREAM);
+	Class->NewFn = Constructor;
 
 	TypeImpl::RegisterClass(manager, Class);
+}
 
-	TypeImpl::DefinePrintableName(Class, "stream");
+Obj* StreamImpl::Constructor(VMThread* thread) {
+	throw ScriptException("Cannot directly construct Stream! Use Stream.FromResource or Stream.FromFile.");
+	return nullptr;
 }
 
 ObjStream* StreamImpl::New(void* streamPtr, bool writable) {
