@@ -2376,7 +2376,7 @@ void Compiler::GetSwitchStatement() {
 	StartBreakpointList();
 
 	// Evaluate the condition
-	ConsumeToken(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+	ConsumeToken(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
 	GetExpression();
 	ConsumeToken(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
 
