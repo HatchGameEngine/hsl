@@ -19,7 +19,7 @@ class VMThread;
 enum {
 	INVOKE_OK,
 	INVOKE_FAIL,
-	INVOKE_RUNTIME_ERROR,
+	INVOKE_DOES_NOT_EXIST
 };
 
 typedef enum {
@@ -29,7 +29,6 @@ typedef enum {
 
 enum ThreadReturnCodes {
 	INTERPRET_EXIT_FROM_DEBUGGER = -200,
-	INTERPRET_RUNTIME_ERROR = -100,
 	INTERPRET_FINISHED = -1,
 	INTERPRET_OK = 0,
 };
