@@ -222,6 +222,9 @@ void GarbageCollector::BlackenObject(Obj* object) {
 	}
 	case OBJ_MAP: {
 		ObjMap* map = (ObjMap*)object;
+		map->Keys->WithAll([this](Uint32, VMValue v) -> void {
+			GrayValue(v);
+		});
 		map->Values->WithAll([this](Uint32, VMValue v) -> void {
 			GrayValue(v);
 		});

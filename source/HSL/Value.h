@@ -6,7 +6,11 @@
 #include <Utilities/PrintBuffer.h>
 
 class Value {
+private:
+	static Uint32 HashDecimal(float val);
+
 public:
+	static Uint32 Hash(VMValue value);
 	static const char* GetPrintableObjectName(VMValue value);
 	static const char* GetClassObjectName(ObjClass* klass);
 	static const char* GetObjectTypeName(Uint32 type);

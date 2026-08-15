@@ -1,6 +1,7 @@
 #include <HSL/ScriptManager.h>
 #include <HSL/TypeImpl/MapImpl.h>
 #include <HSL/TypeImpl/TypeImpl.h>
+#include <HSL/Value.h>
 
 /***
 * \class Map
@@ -30,7 +31,7 @@ Obj* MapImpl::Allocate() {
 	Memory::Track(map, "NewMap");
 	map->Object.Class = Class;
 	map->Values = new OrderedHashMap<VMValue>(NULL, 4);
-	map->Keys = new OrderedHashMap<char*>(NULL, 4);
+	map->Keys = new OrderedHashMap<VMValue>(NULL, 4);
 	return (Obj*)map;
 }
 
@@ -45,11 +46,6 @@ Obj* MapImpl::Constructor(VMThread* thread) {
 
 void MapImpl::Dispose(Obj* object) {
 	ObjMap* map = (ObjMap*)object;
-
-	// Free keys
-	map->Keys->WithAll([](Uint32, char* ptr) -> void {
-		Memory::Free(ptr);
-	});
 
 	// Free Keys table
 	delete map->Keys;
@@ -78,7 +74,7 @@ VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
 /***
  * \method GetKeys
  * \desc Gets a list of all keys in the map.
- * \return array Returns an array of strings.
+ * \return array Returns an array of values.
  * \ns Map
  */
 VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
@@ -88,8 +84,8 @@ VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 
 	ObjArray* array = thread->Manager->NewArray();
 
-	map->Keys->WithAllOrdered([thread, array](Uint32, char* key) -> void {
-		array->Values->push_back(OBJECT_VAL(thread->Manager->CopyString(key)));
+	map->Keys->WithAllOrdered([array](Uint32, VMValue value) -> void {
+		array->Values->push_back(value);
 	});
 
 	return OBJECT_VAL(array);
@@ -98,17 +94,16 @@ VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 /***
  * \method Remove
  * \desc Removes a key from the map.
- * \param key (string): The key to remove.
+ * \param key (value): The key to remove.
  * \ns Map
  */
 VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
 	ScriptManager::CheckArgCount(argCount, 2, thread);
 
 	ObjMap* map = GET_ARG(0, GetMap);
-	const char* key = GET_ARG(1, GetString);
-
-	map->Keys->Remove(key);
-	map->Values->Remove(key);
+	Uint32 hash = Value::Hash(args[1]);
+	map->Keys->Remove(hash);
+	map->Values->Remove(hash);
 
 	return NULL_VAL;
 }
@@ -126,7 +121,7 @@ VMValue MapImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 		key = map->Values->GetNextKey(GET_ARG(1, GetInteger));
 	}
 
-	if (key) {
+	if (key != 0xFFFFFFFF) {
 		return INTEGER_VAL(key);
 	}
 
