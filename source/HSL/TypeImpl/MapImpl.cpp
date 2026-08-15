@@ -19,6 +19,7 @@ MapImpl::MapImpl(ScriptManager* manager) {
 	Manager->DefineNative(Class, "keys", VM_GetKeys);
 	Manager->DefineNative(Class, "Remove", VM_Remove);
 	Manager->DefineNative(Class, "remove", VM_Remove);
+	Manager->DefineNative(Class, "Clear", VM_Clear);
 	Manager->DefineNative(Class, "iterate", VM_Iterate);
 	Manager->DefineNative(Class, "iteratorValue", VM_IteratorValue);
 #endif
@@ -104,6 +105,22 @@ VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
 	Uint32 hash = Value::Hash(args[1]);
 	map->Keys->Remove(hash);
 	map->Values->Remove(hash);
+
+	return NULL_VAL;
+}
+
+/***
+ * \method Clear
+ * \desc Clears the map.
+ * \ns Map
+ */
+VMValue MapImpl::VM_Clear(int argCount, VMValue* args, VMThread* thread) {
+	ScriptManager::CheckArgCount(argCount, 1, thread);
+
+	ObjMap* map = GET_ARG(0, GetMap);
+
+	map->Keys->Clear();
+	map->Values->Clear();
 
 	return NULL_VAL;
 }
