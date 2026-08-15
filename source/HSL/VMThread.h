@@ -9,6 +9,7 @@ class ScriptManager;
 
 class VMThread {
 private:
+	int Error(const char* errorString, bool fatal);
 	void PrintCallTraceFrame(CallFrame* frame, PrintBuffer* buffer, const char* errorString);
 	void PrintStackTrace(PrintBuffer* buffer);
 #ifdef VM_DEBUG
@@ -71,7 +72,8 @@ public:
 	std::string GetFunctionName(ObjFunction* function);
 	void PrintFunctionArgs(CallFrame* frame, PrintBuffer* buffer);
 	void MakeErrorMessage(PrintBuffer* buffer, const char* errorString);
-	int ThrowRuntimeError(bool fatal, const char* errorMessage, ...);
+	int ThrowRuntimeError(const char* errorMessage, ...);
+	int FatalError(const char* errorMessage, ...);
 	int ShowErrorFromScript(const char* errorString, bool detailed);
 	void ShowErrorLocation(const char* errorMessage);
 	void ShowErrorLocation();

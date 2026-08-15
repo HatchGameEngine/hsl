@@ -99,8 +99,7 @@ VMValue ArrayImpl::VM_IteratorValue(int argCount, VMValue* args, VMThread* threa
 	ObjArray* array = thread->GetArray(args, 0);
 	int index = thread->GetInteger(args, 1);
 	if (index < 0 || (Uint32)index >= array->Values->size()) {
-		thread->ThrowRuntimeError(false,
-			"Index %d is out of bounds of array of size %d.",
+		thread->ThrowRuntimeError("Index %d is out of bounds of array of size %d.",
 			index,
 			(int)array->Values->size());
 		return NULL_VAL;

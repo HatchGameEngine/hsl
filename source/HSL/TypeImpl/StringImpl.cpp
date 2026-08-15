@@ -43,7 +43,7 @@ bool StringImpl::VM_ElementGet(Obj* object, VMValue at, VMValue* result, VMThrea
 	ObjString* string = (ObjString*)object;
 
 	if (!IS_INTEGER(at)) {
-		thread->ThrowRuntimeError(false, "Cannot get value from array using non-Integer value as an index.");
+		thread->ThrowRuntimeError("Cannot get value from array using non-Integer value as an index.");
 		if (result) {
 			*result = NULL_VAL;
 		}
@@ -56,7 +56,7 @@ bool StringImpl::VM_ElementGet(Obj* object, VMValue at, VMValue* result, VMThrea
 	}
 
 	if (index >= string->Length) {
-		thread->ThrowRuntimeError(false, "Index %d is out of bounds of string of length %d.",
+		thread->ThrowRuntimeError("Index %d is out of bounds of string of length %d.",
 			index,
 			(int)string->Length);
 		if (result) {

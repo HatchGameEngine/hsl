@@ -1218,7 +1218,7 @@ VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread
 	if (thread->HasProperty(args[0], hash))
 		return thread->GetProperty(args[0], hash);
 
-	thread->ThrowRuntimeError(false, "Could not find %s in %s!", name, GetValueTypeString(args[0]));
+	thread->ThrowRuntimeError("Could not find %s in %s!", name, GetValueTypeString(args[0]));
 	return NULL_VAL;
 }
 

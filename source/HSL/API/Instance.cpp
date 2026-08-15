@@ -9,7 +9,7 @@ Obj* hsl_instance_new_internal(VMThread* vmThread, ObjClass* classObj) {
 		try {
 			return classObj->NewFn(vmThread);
 		} catch (const ScriptException& error) {
-			vmThread->ThrowRuntimeError(false, "%s", error.what());
+			vmThread->ThrowRuntimeError("%s", error.what());
 			return nullptr;
 		}
 	}

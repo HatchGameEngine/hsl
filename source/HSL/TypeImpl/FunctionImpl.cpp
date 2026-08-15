@@ -49,15 +49,13 @@ VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
 
 	if (argCount > 2) {
 		if (argCount - 2 > function->Arity) {
-			thread->ThrowRuntimeError(false,
-				"Expected at most %d arguments, but received %d.",
+			thread->ThrowRuntimeError("Expected at most %d arguments, but received %d.",
 				function->Arity + 1,
 				argCount - 1);
 			return NULL_VAL;
 		}
 		else if (argCount - 2 < function->MinArity) {
-			thread->ThrowRuntimeError(false,
-				"Expected at least %d arguments, but received only %d.",
+			thread->ThrowRuntimeError("Expected at least %d arguments, but received only %d.",
 				function->MinArity + 1,
 				argCount - 1);
 			return NULL_VAL;
@@ -85,15 +83,13 @@ VMValue FunctionImpl::VM_BindArguments(int argCount, VMValue* args, VMThread* th
 	ObjFunction* function = thread->GetFunction(args, 0);
 
 	if (argCount - 1 > function->Arity) {
-		thread->ThrowRuntimeError(false,
-			"Expected at most %d arguments, but received %d.",
+		thread->ThrowRuntimeError("Expected at most %d arguments, but received %d.",
 			function->Arity,
 			argCount - 1);
 		return NULL_VAL;
 	}
 	else if (argCount - 1 < function->MinArity) {
-		thread->ThrowRuntimeError(false,
-			"Expected at least %d arguments, but received only %d.",
+		thread->ThrowRuntimeError("Expected at least %d arguments, but received only %d.",
 			function->MinArity,
 			argCount - 1);
 		return NULL_VAL;

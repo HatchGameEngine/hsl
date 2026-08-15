@@ -194,19 +194,10 @@ void VMThread::MakeErrorMessage(PrintBuffer* buffer, const char* errorString) {
 		buffer_printf(buffer, "Something went wrong in a script.");
 	}
 }
-int VMThread::ThrowRuntimeError(bool fatal, const char* errorMessage, ...) {
+
+int VMThread::Error(const char* errorString, bool fatal) {
 	int errResult = ERROR_RES_EXIT;
 
-	bool showMessageBox = true;
-	if (InstructionIgnoreMap[000000000]) {
-		showMessageBox = false;
-	}
-
-	va_list args;
-	char errorString[2048];
-	va_start(args, errorMessage);
-	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
-	va_end(args);
 	char* textBuffer = (char*)malloc(512);
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
@@ -236,6 +227,24 @@ int VMThread::ThrowRuntimeError(bool fatal, const char* errorMessage, ...) {
 #endif
 	free(textBuffer);
 	return errResult;
+}
+int VMThread::ThrowRuntimeError(const char* errorMessage, ...) {
+	va_list args;
+	char errorString[2048];
+	va_start(args, errorMessage);
+	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
+	va_end(args);
+
+	return Error(errorString, false);
+}
+int VMThread::FatalError(const char* errorMessage, ...) {
+	va_list args;
+	char errorString[2048];
+	va_start(args, errorMessage);
+	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
+	va_end(args);
+
+	return Error(errorString, true);
 }
 int VMThread::ShowErrorFromScript(const char* errorString, bool detailed) {
 	int errResult = ERROR_RES_EXIT;
@@ -509,8 +518,7 @@ void VMThread::DisposeBreakpoints() {
 // #region Stack stuff
 void VMThread::Push(VMValue value) {
 	if (StackSize() == STACK_SIZE_MAX) {
-		if (ThrowRuntimeError(true,
-			    "Stack overflow! \nStack Top: %p \nStack: %p\nCount: %d",
+		if (FatalError("Stack overflow! \nStack Top: %p \nStack: %p\nCount: %d",
 			    StackTop,
 			    Stack,
 			    StackSize()) == ERROR_RES_CONTINUE) {
@@ -522,7 +530,7 @@ void VMThread::Push(VMValue value) {
 }
 VMValue VMThread::Pop() {
 	if (StackTop == Stack) {
-		if (ThrowRuntimeError(true, "Stack underflow!") == ERROR_RES_CONTINUE) {
+		if (FatalError("Stack underflow!") == ERROR_RES_CONTINUE) {
 			return *StackTop;
 		}
 	}
@@ -851,8 +859,7 @@ int VMThread::RunInstruction() {
 				}
 				// Can't do that
 				else {
-					ThrowRuntimeError(false,
-						"Cannot redefine constant %s!",
+					ThrowRuntimeError("Cannot redefine constant %s!",
 						GetVariableOrMethodName(hash));
 				}
 			}
@@ -882,8 +889,7 @@ int VMThread::RunInstruction() {
 				// exact value, in which case we do
 				// nothing
 				else if (!Value::ExactlyEqual(value, originalValue)) {
-					ThrowRuntimeError(false,
-						"Cannot redefine constant %s!",
+					ThrowRuntimeError("Cannot redefine constant %s!",
 						GetVariableOrMethodName(hash));
 				}
 			}
@@ -897,8 +903,7 @@ int VMThread::RunInstruction() {
 				// Can't do that either, we're trying
 				// to be a constant
 				else {
-					ThrowRuntimeError(false,
-						"Cannot redefine constant %s!",
+					ThrowRuntimeError("Cannot redefine constant %s!",
 						GetVariableOrMethodName(hash));
 				}
 			}
@@ -1014,8 +1019,7 @@ int VMThread::RunInstruction() {
 			}
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Only instances and classes have properties; value was of type %s.",
+			ThrowRuntimeError("Only instances and classes have properties; value was of type %s.",
 				GetValueTypeString(object));
 		}
 
@@ -1204,8 +1208,7 @@ int VMThread::RunInstruction() {
 						    hash, &global_value) &&
 						!Manager->Constants->GetIfExists(
 							hash, &global_value)) {
-						ThrowRuntimeError(false,
-							"Variable %s does not exist.",
+						ThrowRuntimeError("Variable %s does not exist.",
 							GetVariableOrMethodName(hash));
 					}
 					else {
@@ -1438,7 +1441,7 @@ int VMThread::RunInstruction() {
 		case WITH_STATE_INIT_SLOTTED: {
 			size_t numIterators = frame->WithReceiverStackTop - frame->WithReceiverStack;
 			if (numIterators >= MAX_WITH_ITERATION) {
-				ThrowRuntimeError(false, "Too many 'with' iterators in this frame! (%d/%d)", (int)numIterators, MAX_WITH_ITERATION);
+				ThrowRuntimeError("Too many 'with' iterators in this frame! (%d/%d)", (int)numIterators, MAX_WITH_ITERATION);
 				Pop(); // pop receiver
 				JUMP(offset);
 				break;
@@ -1539,7 +1542,7 @@ int VMThread::RunInstruction() {
 	VM_CASE(OP_CALL) {
 		int argCount = ReadByte(frame);
 		if (!CallValue(Peek(argCount), argCount)) {
-			ThrowRuntimeError(false, "Could not call value!");
+			ThrowRuntimeError("Could not call value!");
 			VM_BREAK;
 		}
 #ifndef USING_VM_FUNCPTRS
@@ -1616,13 +1619,12 @@ int VMThread::RunInstruction() {
 
 		if (!Manager->ClassExists(hashSuper)) {
 			const char* className = GetVariableOrMethodName(hashSuper);
-			ThrowRuntimeError(false, "Class %s does not exist!", className);
+			ThrowRuntimeError("Class %s does not exist!", className);
 			VM_BREAK;
 		}
 
 		if (klass->Hash == hashSuper) {
-			ThrowRuntimeError(false,
-				"Class %s cannot inherit from itself!",
+			ThrowRuntimeError("Class %s cannot inherit from itself!",
 				klass->Name);
 			VM_BREAK;
 		}
@@ -1630,8 +1632,7 @@ int VMThread::RunInstruction() {
 		VMValue parent;
 		if (Manager->Globals->GetIfExists(hashSuper, &parent) && IS_CLASS(parent)) {
 			if (klass->Parent != nullptr) {
-				ThrowRuntimeError(false,
-					"Class %s already has a parent!",
+				ThrowRuntimeError("Class %s already has a parent!",
 					klass->Name);
 				VM_BREAK;
 			}
@@ -1640,8 +1641,7 @@ int VMThread::RunInstruction() {
 		}
 		else {
 			const char* className = GetVariableOrMethodName(hashSuper);
-			ThrowRuntimeError(false,
-				"Class %s must be imported before %s can inherit it!",
+			ThrowRuntimeError("Class %s must be imported before %s can inherit it!",
 				className,
 				klass->Name);
 		}
@@ -1651,7 +1651,7 @@ int VMThread::RunInstruction() {
 	VM_CASE(OP_NEW) {
 		int argCount = ReadByte(frame);
 		if (!InstantiateClass(Peek(argCount), argCount)) {
-			ThrowRuntimeError(false, "Could not instantiate class!");
+			ThrowRuntimeError("Could not instantiate class!");
 			VM_BREAK;
 		}
 #ifndef USING_VM_FUNCPTRS
@@ -1699,7 +1699,7 @@ int VMThread::RunInstruction() {
 
 	VM_CASE(OP_IMPORT_MODULE) {
 		if (!ImportModule(ReadConstant(frame))) {
-			ThrowRuntimeError(false, "Could not import module!");
+			ThrowRuntimeError("Could not import module!");
 		}
 
 		VM_BREAK;
@@ -1734,8 +1734,7 @@ int VMThread::RunInstruction() {
 			enumeration = AS_ENUM(object);
 		}
 		else {
-			ThrowRuntimeError(false,
-				 "Expected an enumeration, but value was of type %s.",
+			ThrowRuntimeError("Expected an enumeration, but value was of type %s.",
 				 GetValueTypeString(object));
 			goto FAIL_OP_ADD_ENUM;
 		}
@@ -1769,8 +1768,7 @@ int VMThread::RunInstruction() {
 		}
 
 		if (!klass) {
-			ThrowRuntimeError(false,
-				"Only instances and classes have superclasses; value was of type %s.",
+			ThrowRuntimeError("Only instances and classes have superclasses; value was of type %s.",
 				GetValueTypeString(object));
 
 			goto FAIL_OP_GET_SUPERCLASS;
@@ -1782,8 +1780,7 @@ int VMThread::RunInstruction() {
 			VM_BREAK;
 		}
 		else {
-			ThrowRuntimeError(
-				false, "Class %s has no superclass!", klass->Name);
+			ThrowRuntimeError("Class %s has no superclass!", klass->Name);
 		}
 
 	FAIL_OP_GET_SUPERCLASS:
@@ -1821,15 +1818,14 @@ int VMThread::RunInstruction() {
 			VMValue result;
 			if (!Manager->Globals->GetIfExists(hash, &result) &&
 				!Manager->Constants->GetIfExists(hash, &result)) {
-				ThrowRuntimeError(false,
-					"Namespace %s does not exist.",
+				ThrowRuntimeError("Namespace %s does not exist.",
 					GetVariableOrMethodName(hash));
 				Manager->Unlock();
 				VM_BREAK;
 			}
 
 			if (!IS_NAMESPACE(result)) {
-				ThrowRuntimeError(false, "Value was not a namespace.");
+				ThrowRuntimeError("Value was not a namespace.");
 				Manager->Unlock();
 				VM_BREAK;
 			}
@@ -1877,8 +1873,7 @@ int VMThread::RunInstruction() {
 
 		if (!IS_INTEGER(left) || !IS_INTEGER(top) || !IS_INTEGER(right) ||
 			!IS_INTEGER(bottom)) {
-			ThrowRuntimeError(
-				false, "Cannot construct hitbox using non-Integer values.");
+			ThrowRuntimeError("Cannot construct hitbox using non-Integer values.");
 			Push(NULL_VAL);
 			VM_BREAK;
 		}
@@ -1985,15 +1980,13 @@ int VMThread::RunInstruction() {
 		}
 
 		if (!klass) {
-			ThrowRuntimeError(false,
-				"Only instances and classes have superclasses; value was of type %s.",
+			ThrowRuntimeError("Only instances and classes have superclasses; value was of type %s.",
 				GetValueTypeString(value));
 			Push(NULL_VAL);
 			VM_BREAK;
 		}
 		else if (!klass->Parent) {
-			ThrowRuntimeError(
-				false, "Class %s has no superclass!", klass->Name);
+			ThrowRuntimeError("Class %s has no superclass!", klass->Name);
 			Push(NULL_VAL);
 			VM_BREAK;
 		}
@@ -2040,7 +2033,7 @@ int VMThread::RunInstruction() {
 
 	VM_CASE(OP_LOAD_INDIRECT) {
 		if (!IS_LOCATION(Peek(0))) {
-			ThrowRuntimeError(false, "Cannot indirectly load from value.");
+			ThrowRuntimeError("Cannot indirectly load from value.");
 			Push(NULL_VAL);
 			VM_BREAK;
 		}
@@ -2074,7 +2067,7 @@ int VMThread::RunInstruction() {
 	}
 	VM_CASE(OP_STORE_INDIRECT) {
 		if (!IS_LOCATION(Peek(1))) {
-			ThrowRuntimeError(false, "Cannot indirectly store on value.");
+			ThrowRuntimeError("Cannot indirectly store on value.");
 			VM_BREAK;
 		}
 
@@ -2184,14 +2177,12 @@ int VMThread::Invoke(VMValue receiver, Uint8 argCount, Uint32 hash) {
 
 		int status = InvokeForInstance(instance, instance->Object.Class, hash, argCount);
 		if (status == INVOKE_DOES_NOT_EXIST) {
-			ThrowRuntimeError(false,
-				"Method %s does not exist in %s!",
+			ThrowRuntimeError("Method %s does not exist in %s!",
 				GetVariableOrMethodName(hash),
 				instance->Object.Class->Name);
 		}
 		else if (status != INVOKE_OK) {
-			ThrowRuntimeError(false,
-				"Could not call %s in %s!",
+			ThrowRuntimeError("Could not call %s in %s!",
 				GetVariableOrMethodName(hash),
 				instance->Object.Class->Name);
 		}
@@ -2206,16 +2197,14 @@ int VMThread::Invoke(VMValue receiver, Uint8 argCount, Uint32 hash) {
 				return INVOKE_OK;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not call %s in %s!",
+			ThrowRuntimeError("Could not call %s in %s!",
 				GetVariableOrMethodName(hash),
 				klass->Name);
 
 			return INVOKE_FAIL;
 		}
 
-		ThrowRuntimeError(false,
-			"Method %s does not exist in %s!",
+		ThrowRuntimeError("Method %s does not exist in %s!",
 			GetVariableOrMethodName(hash),
 			klass->Name);
 
@@ -2231,22 +2220,19 @@ int VMThread::Invoke(VMValue receiver, Uint8 argCount, Uint32 hash) {
 					return INVOKE_OK;
 				}
 
-				ThrowRuntimeError(false,
-					"Could not call %s in %s!",
+				ThrowRuntimeError("Could not call %s in %s!",
 					GetVariableOrMethodName(hash),
 					klass->Name);
 
 				return INVOKE_FAIL;
 			}
 
-			ThrowRuntimeError(false,
-				"Method %s does not exist in %s!",
+			ThrowRuntimeError("Method %s does not exist in %s!",
 				GetVariableOrMethodName(hash),
 				klass->Name);
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Method %s does not exist in value of type %s!",
+			ThrowRuntimeError("Method %s does not exist in value of type %s!",
 				GetVariableOrMethodName(hash),
 				Value::GetObjectTypeName(obj->Type));
 		}
@@ -2254,14 +2240,13 @@ int VMThread::Invoke(VMValue receiver, Uint8 argCount, Uint32 hash) {
 		return INVOKE_DOES_NOT_EXIST;
 	}
 
-	ThrowRuntimeError(false, "Only instances and classes have methods.");
+	ThrowRuntimeError("Only instances and classes have methods.");
 
 	return INVOKE_FAIL;
 }
 int VMThread::SuperInvoke(VMValue receiver, ObjClass* klass, Uint8 argCount, Uint32 hash) {
 	if (!IS_INSTANCEABLE(receiver)) {
-		ThrowRuntimeError(false,
-			"Cannot call %s in value of type %s!",
+		ThrowRuntimeError("Cannot call %s in value of type %s!",
 			GetVariableOrMethodName(hash),
 			GetValueTypeString(receiver));
 
@@ -2277,8 +2262,7 @@ int VMThread::SuperInvoke(VMValue receiver, ObjClass* klass, Uint8 argCount, Uin
 
 	ObjClass* parentClass = Manager->GetClassParent(obj, klass);
 	if (!parentClass) {
-		ThrowRuntimeError(false,
-			"Class %s does not have a parent to call method from!",
+		ThrowRuntimeError("Class %s does not have a parent to call method from!",
 			klass->Name);
 		return INVOKE_FAIL;
 	}
@@ -2292,8 +2276,7 @@ int VMThread::SuperInvoke(VMValue receiver, ObjClass* klass, Uint8 argCount, Uin
 		return INVOKE_OK;
 	}
 
-	ThrowRuntimeError(false,
-		"Could not call %s in %s!",
+	ThrowRuntimeError("Could not call %s in %s!",
 		GetVariableOrMethodName(hash),
 		klass->Name);
 
@@ -2343,7 +2326,7 @@ void VMThread::CallInitializer(VMValue value) {
 
 	ObjFunction* initializer = AS_FUNCTION(value);
 	if (initializer->MinArity) {
-		ThrowRuntimeError(false, "Initializer must have no parameters.");
+		ThrowRuntimeError("Initializer must have no parameters.");
 	}
 	else {
 		VMValue* lastStackTop = StackTop;
@@ -2421,8 +2404,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 				return result;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not find %s in instance!",
+			ThrowRuntimeError("Could not find %s in instance!",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return NULL_VAL;
@@ -2439,8 +2421,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 				return result;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not find %s in class!",
+			ThrowRuntimeError("Could not find %s in class!",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return NULL_VAL;
@@ -2457,8 +2438,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 				return result;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not find %s in enumeration!",
+			ThrowRuntimeError("Could not find %s in enumeration!",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return NULL_VAL;
@@ -2475,8 +2455,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 				return result;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not find %s in namespace!",
+			ThrowRuntimeError("Could not find %s in namespace!",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return NULL_VAL;
@@ -2493,8 +2472,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 				return result;
 			}
 
-			ThrowRuntimeError(false,
-				"Could not find %s in object!",
+			ThrowRuntimeError("Could not find %s in object!",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 		}
@@ -2502,8 +2480,7 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 		return NULL_VAL;
 	}
 	else {
-		ThrowRuntimeError(false,
-			"Only instances and classes have properties; value was of type %s.",
+		ThrowRuntimeError("Only instances and classes have properties; value was of type %s.",
 			GetValueTypeString(object));
 		return NULL_VAL;
 	}
@@ -2532,16 +2509,15 @@ VMValue VMThread::SetProperty(VMValue object, Uint32 hash, VMValue value) {
 		setter = klass->PropertySet;
 	}
 	else if (IS_NAMESPACE(object)) {
-		ThrowRuntimeError(false, "Cannot modify a namespace.");
+		ThrowRuntimeError("Cannot modify a namespace.");
 		return value;
 	}
 	else if (IS_ENUM(object)) {
-		ThrowRuntimeError(false, "Cannot modify the values of an enumeration.");
+		ThrowRuntimeError("Cannot modify the values of an enumeration.");
 		return value;
 	}
 	else {
-		ThrowRuntimeError(false,
-			"Only instances and classes have properties; value was of type %s.",
+		ThrowRuntimeError("Only instances and classes have properties; value was of type %s.",
 			GetValueTypeString(object));
 		return value;
 	}
@@ -2573,8 +2549,7 @@ VMValue VMThread::SetProperty(VMValue object, Uint32 hash, VMValue value) {
 VMValue VMThread::GetElement(VMValue object, VMValue at) {
 	if (IS_ARRAY(object)) {
 		if (!IS_INTEGER(at)) {
-			ThrowRuntimeError(false,
-				"Cannot get value from array using non-Integer value as an index.");
+			ThrowRuntimeError("Cannot get value from array using non-Integer value as an index.");
 			return NULL_VAL;
 		}
 
@@ -2582,8 +2557,7 @@ VMValue VMThread::GetElement(VMValue object, VMValue at) {
 			ObjArray* array = AS_ARRAY(object);
 			int index = AS_INTEGER(at);
 			if (index < 0 || (Uint32)index >= array->Values->size()) {
-				ThrowRuntimeError(false,
-					"Index %d is out of bounds of array of size %d.",
+				ThrowRuntimeError("Index %d is out of bounds of array of size %d.",
 					index,
 					(int)array->Values->size());
 				Manager->Unlock();
@@ -2610,24 +2584,21 @@ VMValue VMThread::GetElement(VMValue object, VMValue at) {
 	}
 	else if (IS_HITBOX(object)) {
 		if (!IS_INTEGER(at)) {
-			ThrowRuntimeError(false,
-				"Cannot get value from hitbox using non-Integer value as an index.");
+			ThrowRuntimeError("Cannot get value from hitbox using non-Integer value as an index.");
 			return NULL_VAL;
 		}
 
 		Sint16* hitbox = AS_HITBOX(object);
 		int index = AS_INTEGER(at);
 		if (index < HITBOX_LEFT || index > HITBOX_BOTTOM) {
-			ThrowRuntimeError(false,
-				"%d is not a valid hitbox slot. (0 - 3)",
+			ThrowRuntimeError("%d is not a valid hitbox slot. (0 - 3)",
 				index);
 		}
 		return INTEGER_VAL(hitbox[index]);
 	}
 	else {
 		if (!IS_OBJECT(object)) {
-			ThrowRuntimeError(false,
-				"Cannot get element of %s.",
+			ThrowRuntimeError("Cannot get element of %s.",
 				GetValueTypeString(object));
 			return NULL_VAL;
 		}
@@ -2652,8 +2623,7 @@ VMValue VMThread::GetElement(VMValue object, VMValue at) {
 			Manager->Unlock();
 		}
 
-		ThrowRuntimeError(false,
-			"Cannot get value in object of type %s.",
+		ThrowRuntimeError("Cannot get value in object of type %s.",
 			GetValueTypeString(object));
 	}
 
@@ -2662,8 +2632,7 @@ VMValue VMThread::GetElement(VMValue object, VMValue at) {
 VMValue VMThread::SetElement(VMValue object, VMValue at, VMValue value) {
 	if (IS_ARRAY(object)) {
 		if (!IS_INTEGER(at)) {
-			ThrowRuntimeError(false,
-				"Cannot set value from array using non-Integer value as an index.");
+			ThrowRuntimeError("Cannot set value from array using non-Integer value as an index.");
 			return value;
 		}
 
@@ -2671,8 +2640,7 @@ VMValue VMThread::SetElement(VMValue object, VMValue at, VMValue value) {
 			ObjArray* array = AS_ARRAY(object);
 			int index = AS_INTEGER(at);
 			if (index < 0 || (Uint32)index >= array->Values->size()) {
-				ThrowRuntimeError(false,
-					"Index %d is out of bounds of array of size %d.",
+				ThrowRuntimeError("Index %d is out of bounds of array of size %d.",
 					index,
 					(int)array->Values->size());
 				Manager->Unlock();
@@ -2693,8 +2661,7 @@ VMValue VMThread::SetElement(VMValue object, VMValue at, VMValue value) {
 	}
 	else {
 		if (!IS_OBJECT(object)) {
-			ThrowRuntimeError(false,
-				"Cannot set element of %s.",
+			ThrowRuntimeError("Cannot set element of %s.",
 				GetValueTypeString(object));
 			return value;
 		}
@@ -2718,8 +2685,7 @@ VMValue VMThread::SetElement(VMValue object, VMValue at, VMValue value) {
 			Manager->Unlock();
 		}
 
-		ThrowRuntimeError(false,
-			"Cannot set value in object of type %s.",
+		ThrowRuntimeError("Cannot set value in object of type %s.",
 			GetValueTypeString(object));
 	}
 
@@ -2731,8 +2697,7 @@ VMValue VMThread::GetGlobal(Uint32 hash) {
 		VMValue result;
 		if (!Manager->Constants->GetIfExists(hash, &result) &&
 			!Manager->Globals->GetIfExists(hash, &result)) {
-			ThrowRuntimeError(false,
-				"Variable %s does not exist.",
+			ThrowRuntimeError("Variable %s does not exist.",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return NULL_VAL;
@@ -2752,15 +2717,13 @@ void VMThread::SetGlobal(Uint32 hash, VMValue value) {
 
 	if (!Manager->Globals->Exists(hash)) {
 		if (Manager->Constants->Exists(hash)) {
-			ThrowRuntimeError(false,
-			    "Cannot redefine constant %s!",
+			ThrowRuntimeError("Cannot redefine constant %s!",
 			    GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return;
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Global variable %s does not exist.",
+			ThrowRuntimeError("Global variable %s does not exist.",
 				GetVariableOrMethodName(hash));
 			Manager->Unlock();
 			return;
@@ -2773,8 +2736,7 @@ void VMThread::SetGlobal(Uint32 hash, VMValue value) {
 		VMValue result = Value::CastAsInteger(value);
 		if (IS_NULL(result)) {
 			// Conversion failed
-			ThrowRuntimeError(false,
-				"Expected value to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected value to be of type %s instead of %s.",
 				GetTypeString(VAL_INTEGER),
 				GetValueTypeString(value));
 			break;
@@ -2786,8 +2748,7 @@ void VMThread::SetGlobal(Uint32 hash, VMValue value) {
 		VMValue result = Value::CastAsDecimal(value);
 		if (IS_NULL(result)) {
 			// Conversion failed
-			ThrowRuntimeError(false,
-				"Expected value to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected value to be of type %s instead of %s.",
 				GetTypeString(VAL_DECIMAL),
 				GetValueTypeString(value));
 			break;
@@ -2833,7 +2794,7 @@ bool VMThread::GetProperty(Obj* object,
 			} catch (const ScriptException& error) {
 				Push(NULL_VAL);
 
-				ThrowRuntimeError(false, "%s", error.what());
+				ThrowRuntimeError("%s", error.what());
 
 				Manager->Unlock();
 
@@ -2848,8 +2809,7 @@ bool VMThread::GetProperty(Obj* object,
 			return GetProperty(parentClass, hash, checkFields);
 		}
 		else {
-			ThrowRuntimeError(
-				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			ThrowRuntimeError("Undefined property %s.", GetVariableOrMethodName(hash));
 			Push(NULL_VAL);
 		}
 	}
@@ -2866,7 +2826,7 @@ bool VMThread::GetProperty(Obj* object, Uint32 hash, ValueGetFn getter) {
 			return true;
 		}
 
-		ThrowRuntimeError(false, "Undefined property %s.", GetVariableOrMethodName(hash));
+		ThrowRuntimeError("Undefined property %s.", GetVariableOrMethodName(hash));
 		Push(NULL_VAL);
 	}
 	Manager->Unlock();
@@ -2894,8 +2854,7 @@ bool VMThread::GetProperty(ObjClass* klass, Uint32 hash, bool checkFields) {
 			return GetProperty(parentClass, hash);
 		}
 		else {
-			ThrowRuntimeError(
-				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			ThrowRuntimeError("Undefined property %s.", GetVariableOrMethodName(hash));
 			Push(NULL_VAL);
 		}
 	}
@@ -2924,8 +2883,7 @@ bool VMThread::GetProperty(ObjClass* klass, Uint32 hash) {
 			return GetProperty(parentClass, hash);
 		}
 		else {
-			ThrowRuntimeError(
-				false, "Undefined property %s.", GetVariableOrMethodName(hash));
+			ThrowRuntimeError("Undefined property %s.", GetVariableOrMethodName(hash));
 			Push(NULL_VAL);
 		}
 	}
@@ -2955,7 +2913,7 @@ bool VMThread::HasProperty(Obj* object,
 					return true;
 				}
 			} catch (const ScriptException& error) {
-				ThrowRuntimeError(false, "%s", error.what());
+				ThrowRuntimeError("%s", error.what());
 				Manager->Unlock();
 				return false;
 			}
@@ -3041,7 +2999,7 @@ bool VMThread::CallBoundMethod(ObjBoundMethod* bound, int argCount) {
 
 	// Check if there's enough space in the stack.
 	if (StackSize() + numBound + argCount >= STACK_SIZE_MAX) {
-		ThrowRuntimeError(false, "Not enough space in stack for calling bound method!");
+		ThrowRuntimeError("Not enough space in stack for calling bound method!");
 	    return false;
 	}
 
@@ -3064,8 +3022,7 @@ bool VMThread::CallBoundMethod(ObjBoundMethod* bound, int argCount) {
 }
 bool VMThread::CallValue(VMValue callee, int argCount) {
 	if (!IS_CALLABLE(callee)) {
-		ThrowRuntimeError(
-			false, "Cannot call value of type %s.", GetValueTypeString(callee));
+		ThrowRuntimeError("Cannot call value of type %s.", GetValueTypeString(callee));
 		return false;
 	}
 
@@ -3085,7 +3042,7 @@ bool VMThread::CallValue(VMValue callee, int argCount) {
 			try {
 				returnValue = nativeFn(argCount, StackTop - argCount, this);
 			} catch (const ScriptException& error) {
-				ThrowRuntimeError(false, "%s", error.what());
+				ThrowRuntimeError("%s", error.what());
 			}
 
 			StackTop -= argCount; // Pop arguments
@@ -3119,8 +3076,7 @@ bool VMThread::CallValue(VMValue callee, int argCount) {
 }
 bool VMThread::CallForObject(VMValue callee, int argCount) {
 	if (!IS_CALLABLE(callee)) {
-		ThrowRuntimeError(
-			false, "Cannot call value of type %s.", GetValueTypeString(callee));
+		ThrowRuntimeError("Cannot call value of type %s.", GetValueTypeString(callee));
 		return false;
 	}
 
@@ -3135,7 +3091,7 @@ bool VMThread::CallForObject(VMValue callee, int argCount) {
 				// which is the reason these +1 and -1 are here.
 				returnValue = nativeFn(argCount + 1, StackTop - argCount - 1, this);
 			} catch (const ScriptException& error) {
-				ThrowRuntimeError(false, "%s", error.what());
+				ThrowRuntimeError("%s", error.what());
 			}
 
 			StackTop -= argCount; // Pop arguments
@@ -3172,7 +3128,7 @@ bool VMThread::InstantiateClass(VMValue callee, int argCount) {
 	}
 
 	if (!IS_OBJECT(callee) || OBJECT_TYPE(callee) != OBJ_CLASS) {
-		ThrowRuntimeError(false, "Cannot instantiate non-class.");
+		ThrowRuntimeError("Cannot instantiate non-class.");
 		Manager->Unlock();
 		return false;
 	}
@@ -3185,7 +3141,7 @@ bool VMThread::InstantiateClass(VMValue callee, int argCount) {
 		try {
 			instance = klass->NewFn(this);
 		} catch (const ScriptException& error) {
-			ThrowRuntimeError(false, "%s", error.what());
+			ThrowRuntimeError("%s", error.what());
 			Manager->Unlock();
 			return false;
 		}
@@ -3209,7 +3165,7 @@ bool VMThread::InstantiateClass(VMValue callee, int argCount) {
 		return CallForObject(klass->Initializer, argCount);
 	}
 	else if (argCount != 0) {
-		ThrowRuntimeError(false, "Expected no arguments to initializer, got %d.", argCount);
+		ThrowRuntimeError("Expected no arguments to initializer, got %d.", argCount);
 		Manager->Unlock();
 		return false;
 	}
@@ -3220,15 +3176,13 @@ bool VMThread::InstantiateClass(VMValue callee, int argCount) {
 bool VMThread::Call(ObjFunction* function, int argCount) {
 	if (function->MinArity < function->Arity) {
 		if (argCount < (int)function->MinArity) {
-			ThrowRuntimeError(false,
-				"Expected at least %d arguments to function call, got %d.",
+			ThrowRuntimeError("Expected at least %d arguments to function call, got %d.",
 				(int)function->MinArity,
 				argCount);
 			return false;
 		}
 		else if (argCount > (int)function->Arity) {
-			ThrowRuntimeError(false,
-				"Expected at most %d arguments to function call, got %d.",
+			ThrowRuntimeError("Expected at most %d arguments to function call, got %d.",
 				(int)function->Arity,
 				argCount);
 			return false;
@@ -3241,15 +3195,14 @@ bool VMThread::Call(ObjFunction* function, int argCount) {
 		}
 	}
 	else if (argCount != (int)function->Arity) {
-		ThrowRuntimeError(false,
-			"Expected %d arguments to function call, got %d.",
+		ThrowRuntimeError("Expected %d arguments to function call, got %d.",
 			(int)function->Arity,
 			argCount);
 		return false;
 	}
 
 	if (FrameCount == FRAMES_MAX) {
-		ThrowRuntimeError(true, "Frame overflow. (Count %d / %d)", FrameCount, FRAMES_MAX);
+		FatalError("Frame overflow. (Count %d / %d)", FrameCount, FRAMES_MAX);
 		return false;
 	}
 
@@ -3362,7 +3315,7 @@ bool VMThread::DoClassExtension(VMValue value, VMValue originalValue, bool clear
 	// a parent yet, then set the parent of the class being extended to that superclass.
 	if (src->Parent != nullptr) {
 		if (dst->Parent != nullptr) {
-			ThrowRuntimeError(false, "Class %s already has a parent!", dst->Name);
+			ThrowRuntimeError("Class %s already has a parent!", dst->Name);
 		}
 		else {
 			dst->Parent = src->Parent;
@@ -3375,8 +3328,7 @@ bool VMThread::Import(VMValue value) {
 	bool result = false;
 	if (Manager->Lock()) {
 		if (!IS_OBJECT(value) || OBJECT_TYPE(value) != OBJ_STRING) {
-			ThrowRuntimeError(
-				false, "Cannot import from a %s.", GetValueTypeString(value));
+			ThrowRuntimeError("Cannot import from a %s.", GetValueTypeString(value));
 		}
 		else {
 			char* className = AS_CSTRING(value);
@@ -3386,8 +3338,7 @@ bool VMThread::Import(VMValue value) {
 			else {
 				Manager->Unlock();
 #ifdef HSL_LIBRARY
-				ThrowRuntimeError(
-					false, "Could not import \"%s\"!", className);
+				ThrowRuntimeError("Could not import \"%s\"!", className);
 #else
 				return ImportModule(value);
 #endif
@@ -3401,8 +3352,7 @@ bool VMThread::ImportModule(VMValue value) {
 	bool result = false;
 	if (Manager->Lock()) {
 		if (!IS_OBJECT(value) || OBJECT_TYPE(value) != OBJ_STRING) {
-			ThrowRuntimeError(
-				false, "Cannot import from a %s.", GetValueTypeString(value));
+			ThrowRuntimeError("Cannot import from a %s.", GetValueTypeString(value));
 		}
 		else {
 			char* scriptName = AS_CSTRING(value);
@@ -3411,8 +3361,7 @@ bool VMThread::ImportModule(VMValue value) {
 			}
 			else {
 #ifdef HSL_LIBRARY
-				ThrowRuntimeError(
-					false, "Could not import \"%s\"!", scriptName);
+				ThrowRuntimeError("Could not import \"%s\"!", scriptName);
 #else
 				Log::Print(Log::LOG_ERROR, "Could not import \"%s\"!", scriptName);
 #endif
@@ -3426,8 +3375,7 @@ bool VMThread::ImportModule(VMValue value) {
 // #region Value Operations
 #define CHECK_IS_NUM(a, b, def) \
 	if (IS_NOT_NUMBER(a)) { \
-		ThrowRuntimeError(false, \
-			"Cannot perform %s operation on non-number value of type %s.", \
+		ThrowRuntimeError("Cannot perform %s operation on non-number value of type %s.", \
 			#b, \
 			GetValueTypeString(a)); \
 		a = def; \
@@ -3465,7 +3413,7 @@ VMValue VMThread::Values_Division() {
 		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
 		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
 		if (b_d == 0.0) {
-			ThrowRuntimeError(false, "Cannot divide decimal by zero.");
+			ThrowRuntimeError("Cannot divide decimal by zero.");
 			return DECIMAL_VAL(0.f);
 		}
 		return DECIMAL_VAL(a_d / b_d);
@@ -3473,7 +3421,7 @@ VMValue VMThread::Values_Division() {
 	int a_d = AS_INTEGER(a);
 	int b_d = AS_INTEGER(b);
 	if (b_d == 0) {
-		ThrowRuntimeError(false, "Cannot divide integer by zero.");
+		ThrowRuntimeError("Cannot divide integer by zero.");
 		return INTEGER_VAL(0);
 	}
 	return INTEGER_VAL(a_d / b_d);
@@ -3489,7 +3437,7 @@ VMValue VMThread::Values_Modulo() {
 		float a_d = AS_DECIMAL(Value::CastAsDecimal(a));
 		float b_d = AS_DECIMAL(Value::CastAsDecimal(b));
 		if (b_d == 0.0) {
-			ThrowRuntimeError(false, "Cannot perform modulo by zero.");
+			ThrowRuntimeError("Cannot perform modulo by zero.");
 			return DECIMAL_VAL(0.f);
 		}
 		return DECIMAL_VAL(fmod(a_d, b_d));
@@ -3497,7 +3445,7 @@ VMValue VMThread::Values_Modulo() {
 	int a_d = AS_INTEGER(a);
 	int b_d = AS_INTEGER(b);
 	if (b_d == 0) {
-		ThrowRuntimeError(false, "Cannot perform modulo by zero.");
+		ThrowRuntimeError("Cannot perform modulo by zero.");
 		return INTEGER_VAL(0);
 	}
 	return INTEGER_VAL(a_d % b_d);
@@ -3847,8 +3795,7 @@ bool VMThread::DoIntegerConversion(VMValue& value) {
 	VMValue result = Value::CastAsInteger(value);
 	if (IS_NULL(result)) {
 		// Conversion failed
-		ThrowRuntimeError(false,
-			"Expected value to be of type %s; value was of type %s.",
+		ThrowRuntimeError("Expected value to be of type %s; value was of type %s.",
 			GetTypeString(VAL_INTEGER),
 			GetValueTypeString(value));
 		return false;
@@ -3860,8 +3807,7 @@ bool VMThread::DoDecimalConversion(VMValue& value) {
 	VMValue result = Value::CastAsDecimal(value);
 	if (IS_NULL(result)) {
 		// Conversion failed
-		ThrowRuntimeError(false,
-			"Expected value to be of type %s; value was of type %s.",
+		ThrowRuntimeError("Expected value to be of type %s; value was of type %s.",
 			GetTypeString(VAL_DECIMAL),
 			GetValueTypeString(value));
 		return false;
@@ -3872,8 +3818,7 @@ bool VMThread::DoDecimalConversion(VMValue& value) {
 
 bool VMThread::CheckArgCount(int argCount, int expects) {
 	if (argCount != expects) {
-		ThrowRuntimeError(false,
-			"Expected %d arguments but got %d.",
+		ThrowRuntimeError("Expected %d arguments but got %d.",
 			expects,
 			argCount);
 
@@ -3884,8 +3829,7 @@ bool VMThread::CheckArgCount(int argCount, int expects) {
 }
 bool VMThread::CheckAtLeastArgCount(int argCount, int expects) {
 	if (argCount < expects) {
-		ThrowRuntimeError(false,
-			"Expected at least %d arguments but got %d.",
+		ThrowRuntimeError("Expected at least %d arguments but got %d.",
 			expects,
 			argCount);
 
@@ -3906,8 +3850,7 @@ int VMThread::GetInteger(VMValue* args, int index) {
 		value = AS_INTEGER(args[index]);
 		break;
 	default:
-		ThrowRuntimeError(false,
-			"Expected argument %d to be of type %s instead of %s.",
+		ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 		    index + 1,
 		    GetTypeString(VAL_INTEGER),
 		    GetValueTypeString(args[index]));
@@ -3926,8 +3869,7 @@ float VMThread::GetDecimal(VMValue* args, int index) {
 		value = AS_DECIMAL(Value::CastAsDecimal(args[index]));
 		break;
 	default:
-		ThrowRuntimeError(false,
-			"Expected argument %d to be of type %s instead of %s.",
+		ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 		    index + 1,
 		    GetTypeString(VAL_DECIMAL),
 		    GetValueTypeString(args[index]));
@@ -3941,8 +3883,7 @@ char* VMThread::GetString(VMValue* args, int index) {
 			value = AS_CSTRING(args[index]);
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_STRING),
 			    GetValueTypeString(args[index]));
@@ -3958,8 +3899,7 @@ ObjString* VMThread::GetVMString(VMValue* args, int index) {
 			value = AS_STRING(args[index]);
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 				index + 1,
 			    GetObjectTypeString(OBJ_STRING),
 			    GetValueTypeString(args[index]));
@@ -3975,8 +3915,7 @@ ObjArray* VMThread::GetArray(VMValue* args, int index) {
 			value = (ObjArray*)(AS_OBJECT(args[index]));
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_ARRAY),
 			    GetValueTypeString(args[index]));
@@ -3992,8 +3931,7 @@ ObjMap* VMThread::GetMap(VMValue* args, int index) {
 			value = (ObjMap*)(AS_OBJECT(args[index]));
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_MAP),
 			    GetValueTypeString(args[index]));
@@ -4009,8 +3947,7 @@ ObjBoundMethod* VMThread::GetBoundMethod(VMValue* args, int index) {
 			value = (ObjBoundMethod*)(AS_OBJECT(args[index]));
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_BOUND_METHOD),
 			    GetValueTypeString(args[index]));
@@ -4026,8 +3963,7 @@ ObjFunction* VMThread::GetFunction(VMValue* args, int index) {
 			value = (ObjFunction*)(AS_OBJECT(args[index]));
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_FUNCTION),
 			    GetValueTypeString(args[index]));
@@ -4043,8 +3979,7 @@ VMValue VMThread::GetCallable(VMValue* args, int index) {
 			value = args[index];
 		}
 		else {
-			ThrowRuntimeError(false,
-			    "Expected argument %d to be of type callable instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type callable instead of %s.",
 			    index + 1,
 			    GetValueTypeString(args[index]));
 		}
@@ -4059,8 +3994,7 @@ ObjInstance* VMThread::GetInstance(VMValue* args, int index) {
 			value = AS_INSTANCE(args[index]);
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    GetObjectTypeString(OBJ_INSTANCE),
 			    GetValueTypeString(args[index]));
@@ -4076,8 +4010,7 @@ ObjStream* VMThread::GetStream(VMValue* args, int index) {
 			value = AS_STREAM(args[index]);
 		}
 		else {
-			ThrowRuntimeError(false,
-				"Expected argument %d to be of type %s instead of %s.",
+			ThrowRuntimeError("Expected argument %d to be of type %s instead of %s.",
 			    index + 1,
 			    Value::GetClassObjectName(Manager->ImplStream->Class),
 			    GetValueTypeString(args[index]));
