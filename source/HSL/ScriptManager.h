@@ -185,6 +185,7 @@ public:
 
 #ifdef HSL_VM
 	static VMValue VM_GetClass(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_HasField(int argCount, VMValue* args, VMThread* thread);
 	static VMValue VM_GetField(int argCount, VMValue* args, VMThread* thread);
 	static VMValue VM_SetField(int argCount, VMValue* args, VMThread* thread);
 #endif

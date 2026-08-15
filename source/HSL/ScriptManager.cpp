@@ -1415,6 +1415,15 @@ VMValue ScriptManager::VM_GetClass(int argCount, VMValue* args, VMThread* thread
 	return NULL_VAL;
 }
 
+VMValue ScriptManager::VM_HasField(int argCount, VMValue* args, VMThread* thread) {
+	CheckArgCount(argCount, 2, thread);
+
+	const char* name = thread->Manager->GetString(args, 1, thread);
+	Uint32 hash = Murmur::EncryptString(name);
+
+	return INTEGER_VAL(thread->HasProperty(args[0], hash));
+}
+
 VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread) {
 	CheckArgCount(argCount, 2, thread);
 
@@ -1485,6 +1494,7 @@ ObjClass* ScriptManager::NewClass(Uint32 hash) {
 	klass->Name = StringUtils::Create(GetClassName(hash));
 #ifdef HSL_VM
 	DefineNative(klass, "GetClass", VM_GetClass);
+	DefineNative(klass, "HasField", VM_HasField);
 	DefineNative(klass, "GetField", VM_GetField);
 	DefineNative(klass, "SetField", VM_SetField);
 #endif
