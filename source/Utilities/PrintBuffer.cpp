@@ -1,4 +1,4 @@
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Utilities/PrintBuffer.h>
 
 int buffer_printf(PrintBuffer* printBuffer, const char* format, ...) {

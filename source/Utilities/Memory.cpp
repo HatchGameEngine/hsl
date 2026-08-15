@@ -1,7 +1,7 @@
-#include <Diagnostics/Memory.h>
+#include <Utilities/Memory.h>
 
 #ifdef MEMORY_TRACKING
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 
 vector<void*> Memory::TrackedMemory;
 vector<size_t> Memory::TrackedSizes;

@@ -1,4 +1,4 @@
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <IO/Stream.h>
 
 #ifdef USE_ZLIB

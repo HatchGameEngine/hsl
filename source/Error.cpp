@@ -1,4 +1,4 @@
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Error.h>
 #include <Includes/Standard.h>
 

@@ -110,8 +110,6 @@ set(HSL_MAIN_SOURCES
   source/HSL/Types.cpp
   source/HSL/Value.cpp
   source/HSL/ValuePrinter.cpp
-  source/Diagnostics/Log.cpp
-  source/Diagnostics/Memory.cpp
   source/Error.cpp
   source/Filesystem/Directory.cpp
   source/Filesystem/File.cpp
@@ -126,6 +124,8 @@ set(HSL_MAIN_SOURCES
   source/IO/Stream.cpp
   source/IO/TerminalInput.cpp
   source/IO/TextStream.cpp
+  source/Utilities/Log.cpp
+  source/Utilities/Memory.cpp
   source/Utilities/PrintBuffer.cpp
   source/Utilities/StringUtils.cpp
 )

@@ -3,7 +3,7 @@
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
 #include <HSL/VMThread.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Utilities/Clock.h>
 #include <Utilities/StringUtils.h>
 

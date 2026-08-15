@@ -1,7 +1,7 @@
 #include <HSL/BytecodeDebugger.h>
 #include <HSL/CompilerEnums.h>
 #include <HSL/ScriptManager.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Exceptions/CompilerErrorException.h>
 #include <Exceptions/ScriptREPLException.h>
 #include <Filesystem/File.h>

@@ -1,6 +1,6 @@
 #include <HSL/Bytecode.h>
 #include <HSL/ScriptManager.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <IO/MemoryStream.h>
 #include <Utilities/StringUtils.h>
 

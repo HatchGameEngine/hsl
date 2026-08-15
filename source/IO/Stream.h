@@ -1,7 +1,7 @@
 #ifndef IO_STREAM_H
 #define IO_STREAM_H
 
-#include <Diagnostics/Memory.h>
+#include <Utilities/Memory.h>
 #include <Includes/Standard.h>
 
 class Stream {

@@ -1,7 +1,7 @@
 #include <HSL/Bytecode.h>
 #include <HSL/BytecodeDebugger.h>
 #include <HSL/ValuePrinter.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 
 #define DEBUGGER_LOG(...) \
 	if (PrintToLog) { \

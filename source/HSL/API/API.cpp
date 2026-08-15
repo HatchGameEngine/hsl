@@ -2,7 +2,7 @@
 #include <HSL/API.h>
 #include <HSL/ScriptManager.h>
 #include <Main.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Hashing/Murmur.h>
 
 const char* hsl_get_version() {

@@ -1,7 +1,7 @@
 #include <HSL/GarbageCollector.h>
 
 #include <HSL/ScriptManager.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Includes/HashMap.h>
 
 #ifdef USE_CLOCK

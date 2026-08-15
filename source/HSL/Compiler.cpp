@@ -9,7 +9,7 @@
 #include <HSL/GarbageCollector.h>
 #include <HSL/ScriptManager.h>
 #include <HSL/Value.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Exceptions/CompilerErrorException.h>
 #include <Utilities/StringUtils.h>
 

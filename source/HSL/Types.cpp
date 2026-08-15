@@ -2,7 +2,7 @@
 #include <HSL/Bytecode.h>
 #include <HSL/Value.h>
 #include <HSL/VMThread.h>
-#include <Diagnostics/Memory.h>
+#include <Utilities/Memory.h>
 
 #define GROW_CAPACITY(val) ((val) < 8 ? 8 : val << 1)
 

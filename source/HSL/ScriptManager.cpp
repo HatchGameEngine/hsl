@@ -3,7 +3,7 @@
 #include <HSL/TypeImpl/TypeImpl.h>
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
-#include <Diagnostics/Log.h>
+#include <Utilities/Log.h>
 #include <Filesystem/File.h>
 #include <Hashing/CombinedHash.h>
 #include <Utilities/StringUtils.h>
