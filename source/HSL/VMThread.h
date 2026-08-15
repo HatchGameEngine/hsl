@@ -76,7 +76,6 @@ public:
 	void ShowErrorLocation(const char* errorMessage);
 	void ShowErrorLocation();
 	void PrintStack();
-	void ReturnFromNative() throw();
 #ifdef VM_DEBUG
 	VMThreadBreakpoint* AddBreakpoint(ObjFunction* function, Uint32 position, int type);
 	VMThreadBreakpoint* GetBreakpoint(int index);

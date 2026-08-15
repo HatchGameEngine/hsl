@@ -301,7 +301,6 @@ void VMThread::PrintStack() {
 		i--;
 	}
 }
-void VMThread::ReturnFromNative() throw() {}
 // #endregion
 
 // #region Debugging

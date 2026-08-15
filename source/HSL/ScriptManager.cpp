@@ -1103,12 +1103,10 @@ int GetInteger(VMValue* args, int index, VMThread* thread) {
 		value = AS_INTEGER(args[index]);
 		break;
 	default:
-		if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetTypeString(VAL_INTEGER),
-			    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-			thread->ReturnFromNative();
-		}
+		VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+		    index + 1,
+		    GetTypeString(VAL_INTEGER),
+		    GetValueTypeString(args[index]));
 	}
 	return value;
 }
@@ -1124,12 +1122,10 @@ float GetDecimal(VMValue* args, int index, VMThread* thread) {
 		value = AS_DECIMAL(Value::CastAsDecimal(args[index]));
 		break;
 	default:
-		if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetTypeString(VAL_DECIMAL),
-			    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-			thread->ReturnFromNative();
-		}
+		VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+		    index + 1,
+		    GetTypeString(VAL_DECIMAL),
+		    GetValueTypeString(args[index]));
 	}
 	return value;
 }
@@ -1140,13 +1136,10 @@ char* GetString(VMValue* args, int index, VMThread* thread) {
 			value = AS_CSTRING(args[index]);
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_STRING),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->Manager->Unlock();
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_STRING),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1159,13 +1152,10 @@ ObjString* GetVMString(VMValue* args, int index, VMThread* thread) {
 			value = AS_STRING(args[index]);
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_STRING),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->Manager->Unlock();
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+				index + 1,
+			    GetObjectTypeString(OBJ_STRING),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1178,12 +1168,10 @@ ObjArray* GetArray(VMValue* args, int index, VMThread* thread) {
 			value = (ObjArray*)(AS_OBJECT(args[index]));
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_ARRAY),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_ARRAY),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1196,12 +1184,10 @@ ObjMap* GetMap(VMValue* args, int index, VMThread* thread) {
 			value = (ObjMap*)(AS_OBJECT(args[index]));
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_MAP),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_MAP),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1214,12 +1200,10 @@ ObjBoundMethod* GetBoundMethod(VMValue* args, int index, VMThread* thread) {
 			value = (ObjBoundMethod*)(AS_OBJECT(args[index]));
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_BOUND_METHOD),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_BOUND_METHOD),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1232,12 +1216,10 @@ ObjFunction* GetFunction(VMValue* args, int index, VMThread* thread) {
 			value = (ObjFunction*)(AS_OBJECT(args[index]));
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_FUNCTION),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_FUNCTION),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1250,12 +1232,10 @@ VMValue GetCallable(VMValue* args, int index, VMThread* thread) {
 			value = args[index];
 		}
 		else {
-			if (VM_THROW_ERROR(
-				    "Expected argument %d to be of type callable instead of %s.",
-				    index + 1,
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR(
+			    "Expected argument %d to be of type callable instead of %s.",
+			    index + 1,
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1268,12 +1248,10 @@ ObjInstance* GetInstance(VMValue* args, int index, VMThread* thread) {
 			value = AS_INSTANCE(args[index]);
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    GetObjectTypeString(OBJ_INSTANCE),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_INSTANCE),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1286,12 +1264,10 @@ ObjStream* GetStream(VMValue* args, int index, VMThread* thread) {
 			value = AS_STREAM(args[index]);
 		}
 		else {
-			if (VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				    index + 1,
-				    Value::GetClassObjectName(thread->Manager->ImplStream->Class),
-				    GetValueTypeString(args[index])) == ERROR_RES_CONTINUE) {
-				thread->ReturnFromNative();
-			}
+			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    Value::GetClassObjectName(thread->Manager->ImplStream->Class),
+			    GetValueTypeString(args[index]));
 		}
 		thread->Manager->Unlock();
 	}
@@ -1329,18 +1305,12 @@ ObjFunction* ScriptManager::GetFunction(VMValue* args, int index, VMThread* thre
 
 void ScriptManager::CheckArgCount(int argCount, int expects, VMThread* thread) {
 	if (argCount != expects) {
-		if (VM_THROW_ERROR("Expected %d arguments but got %d.", expects, argCount) ==
-			ERROR_RES_CONTINUE) {
-			thread->ReturnFromNative();
-		}
+		VM_THROW_ERROR("Expected %d arguments but got %d.", expects, argCount);
 	}
 }
 void ScriptManager::CheckAtLeastArgCount(int argCount, int expects, VMThread* thread) {
 	if (argCount < expects) {
-		if (VM_THROW_ERROR("Expected at least %d arguments but got %d.", expects, argCount) ==
-			ERROR_RES_CONTINUE) {
-			thread->ReturnFromNative();
-		}
+		VM_THROW_ERROR("Expected at least %d arguments but got %d.", expects, argCount);
 	}
 }
 #endif
