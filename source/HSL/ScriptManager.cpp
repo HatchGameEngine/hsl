@@ -71,6 +71,8 @@ void ScriptManager::ResetStack() {
 ScriptManager::ScriptManager() {
 	Constants = new HashMap<VMValue>(NULL, 8);
 
+	Strings = new ankerl::unordered_dense::map<std::string_view, ObjString*>();
+
 #ifdef HSL_VM
 	Globals = new HashMap<VMValue>(NULL, 8);
 	Sources = new HashMap<BytecodeContainer>(NULL, 8);
@@ -135,6 +137,8 @@ ScriptManager::~ScriptManager() {
 		delete Constants;
 		Constants = nullptr;
 	}
+
+	delete Strings;
 
 #ifdef HSL_LIBRARY
 	ImportScriptHandler = NULL;
@@ -374,6 +378,13 @@ void ScriptManager::DisposeThread(VMThread* thread) {
 void ScriptManager::DestroyObject(Obj* object) {
 	switch (object->Type) {
 	case OBJ_STRING:
+		// Remove interned string
+		if (Strings) {
+			ObjString* string = (ObjString*)object;
+			std::string_view view(string->Chars, string->Length);
+			Strings->erase(view);
+		}
+
 		ImplString->Dispose(object);
 		break;
 	case OBJ_ARRAY:
@@ -1356,12 +1367,44 @@ Obj* ScriptManager::AllocateObject(size_t size, ObjType type) {
 	return object;
 }
 
+ObjString* ScriptManager::GetInternedString(std::string_view view) {
+	if (Strings->count(view) > 0) {
+		return (*Strings)[view];
+	}
+
+	return nullptr;
+}
+
+ObjString* ScriptManager::CreateInternedString(std::string_view view) {
+	ObjString* string = (ObjString*)ImplString->New((char*)view.data(), view.length());
+
+	(*Strings)[view] = string;
+
+	return string;
+}
+
 ObjString* ScriptManager::AllocateString(char* chars, size_t length) {
-	return (ObjString*)ImplString->New(chars, length);
+	std::string_view view(chars, length);
+
+	ObjString* string = GetInternedString(view);
+	if (string) {
+		return string;
+	}
+
+	return CreateInternedString(view);
 }
 
 ObjString* ScriptManager::TakeString(char* chars, size_t length) {
-	return AllocateString(chars, length);
+	std::string_view view(chars, length);
+
+	ObjString* string = GetInternedString(view);
+	if (string) {
+		// This string was already interned, so we have to free chars
+		Memory::Free(chars);
+		return string;
+	}
+
+	return CreateInternedString(view);
 }
 ObjString* ScriptManager::TakeString(char* chars) {
 	return TakeString(chars, strlen(chars));
@@ -1396,12 +1439,6 @@ ObjString* ScriptManager::CopyString(ObjString* string) {
 	heapChars[string->Length] = '\0';
 
 	return AllocateString(heapChars, string->Length);
-}
-ObjString* ScriptManager::AllocString(size_t length) {
-	char* heapChars = ALLOCATE(char, length + 1);
-	heapChars[length] = '\0';
-
-	return AllocateString(heapChars, length);
 }
 
 #ifdef HSL_VM
@@ -1619,10 +1656,15 @@ VMValue ScriptManager::ConcatenateValues(VMValue va, VMValue vb) {
 	ObjString* b = AS_STRING(vb);
 
 	size_t length = a->Length + b->Length;
-	ObjString* result = AllocString(length);
+	char* chars = (char*)Memory::Malloc(length + 1);
+	if (!chars) {
+		return NULL_VAL;
+	}
 
-	memcpy(result->Chars, a->Chars, a->Length);
-	memcpy(result->Chars + a->Length, b->Chars, b->Length);
-	result->Chars[length] = 0;
+	memcpy(chars, a->Chars, a->Length);
+	memcpy(chars + a->Length, b->Chars, b->Length);
+	chars[length] = 0;
+
+	ObjString* result = TakeString(chars, length);
 	return OBJECT_VAL(result);
 }

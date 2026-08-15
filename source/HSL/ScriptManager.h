@@ -81,6 +81,8 @@ public:
 
 	HashMap<VMValue>* Constants = nullptr;
 
+	ankerl::unordered_dense::map<std::string_view, ObjString*>* Strings = nullptr;
+
 	ArrayImpl* ImplArray = nullptr;
 	FunctionImpl* ImplFunction = nullptr;
 	InstanceImpl* ImplInstance = nullptr;
@@ -191,6 +193,8 @@ public:
 #endif
 
 	Obj* AllocateObject(size_t size, ObjType type);
+	ObjString* GetInternedString(std::string_view view);
+	ObjString* CreateInternedString(std::string_view view);
 	ObjString* AllocateString(char* chars, size_t length);
 	ObjString* TakeString(char* chars, size_t length);
 	ObjString* TakeString(char* chars);
@@ -198,7 +202,6 @@ public:
 	ObjString* CopyString(const char* chars);
 	ObjString* CopyString(std::string path);
 	ObjString* CopyString(ObjString* string);
-	ObjString* AllocString(size_t length);
 	ObjFunction* NewFunction();
 	ObjNative* NewNative(NativeFn function);
 	ObjAPINative* NewAPINative(APINativeFn function);
