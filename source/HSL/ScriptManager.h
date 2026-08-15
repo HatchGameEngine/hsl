@@ -225,8 +225,4 @@ public:
 	VMValue ConcatenateValues(VMValue va, VMValue vb);
 };
 
-#ifdef HSL_VM
-#define VM_THROW_ERROR(...) thread->ThrowRuntimeError(false, __VA_ARGS__)
-#endif
-
 #endif /* HSL_SCRIPTMANAGER_H */

@@ -31,8 +31,6 @@ Obj* FunctionImpl::New() {
 }
 
 #ifdef HSL_VM
-#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
-
 /***
  * \method Bind
  * \desc Binds a receiver, and optionally arguments, to a method.
@@ -47,17 +45,19 @@ VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
 		return NULL_VAL;
 	}
 
-	ObjFunction* function = GET_ARG(0, GetFunction);
+	ObjFunction* function = thread->GetFunction(args, 0);
 
 	if (argCount > 2) {
 		if (argCount - 2 > function->Arity) {
-			VM_THROW_ERROR("Expected at most %d arguments, but received %d.",
+			thread->ThrowRuntimeError(false,
+				"Expected at most %d arguments, but received %d.",
 				function->Arity + 1,
 				argCount - 1);
 			return NULL_VAL;
 		}
 		else if (argCount - 2 < function->MinArity) {
-			VM_THROW_ERROR("Expected at least %d arguments, but received only %d.",
+			thread->ThrowRuntimeError(false,
+				"Expected at least %d arguments, but received only %d.",
 				function->MinArity + 1,
 				argCount - 1);
 			return NULL_VAL;
@@ -82,16 +82,18 @@ VMValue FunctionImpl::VM_BindArguments(int argCount, VMValue* args, VMThread* th
 		return NULL_VAL;
 	}
 
-	ObjFunction* function = GET_ARG(0, GetFunction);
+	ObjFunction* function = thread->GetFunction(args, 0);
 
 	if (argCount - 1 > function->Arity) {
-		VM_THROW_ERROR("Expected at most %d arguments, but received %d.",
+		thread->ThrowRuntimeError(false,
+			"Expected at most %d arguments, but received %d.",
 			function->Arity,
 			argCount - 1);
 		return NULL_VAL;
 	}
 	else if (argCount - 1 < function->MinArity) {
-		VM_THROW_ERROR("Expected at least %d arguments, but received only %d.",
+		thread->ThrowRuntimeError(false,
+			"Expected at least %d arguments, but received only %d.",
 			function->MinArity,
 			argCount - 1);
 		return NULL_VAL;

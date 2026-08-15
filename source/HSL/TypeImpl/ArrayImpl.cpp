@@ -35,8 +35,6 @@ Obj* ArrayImpl::Constructor(VMThread* thread) {
 	return thread->Manager->ImplArray->Allocate();
 }
 
-#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
-
 #ifdef HSL_VM
 /***
  * \constructor
@@ -53,7 +51,7 @@ VMValue ArrayImpl::VM_Initializer(int argCount, VMValue* args, VMThread* thread)
 	int length = 0;
 	VMValue initialValue = NULL_VAL;
 	if (argCount >= 2) {
-		length = GET_ARG(1, GetInteger);
+		length = thread->GetInteger(args, 1);
 	}
 	if (argCount >= 3) {
 		initialValue = args[2];
@@ -80,13 +78,13 @@ void ArrayImpl::Dispose(Obj* object) {
 VMValue ArrayImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 2);
 
-	ObjArray* array = GET_ARG(0, GetArray);
+	ObjArray* array = thread->GetArray(args, 0);
 
 	if (array->Values->size() && IS_NULL(args[1])) {
 		return INTEGER_VAL(0);
 	}
 	else if (!IS_NULL(args[1])) {
-		int iteration = GET_ARG(1, GetInteger) + 1;
+		int iteration = thread->GetInteger(args, 1) + 1;
 		if (iteration >= 0 && iteration < array->Values->size()) {
 			return INTEGER_VAL(iteration);
 		}
@@ -98,8 +96,8 @@ VMValue ArrayImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 VMValue ArrayImpl::VM_IteratorValue(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 2);
 
-	ObjArray* array = GET_ARG(0, GetArray);
-	int index = GET_ARG(1, GetInteger);
+	ObjArray* array = thread->GetArray(args, 0);
+	int index = thread->GetInteger(args, 1);
 	if (index < 0 || (Uint32)index >= array->Values->size()) {
 		thread->ThrowRuntimeError(false,
 			"Index %d is out of bounds of array of size %d.",

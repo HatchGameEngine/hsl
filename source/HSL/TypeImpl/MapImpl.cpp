@@ -56,8 +56,6 @@ void MapImpl::Dispose(Obj* object) {
 }
 
 #ifdef HSL_VM
-#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
-
 /***
  * \method Length
  * \desc Get the number of items in the map.
@@ -67,7 +65,7 @@ void MapImpl::Dispose(Obj* object) {
 VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 1);
 
-	ObjMap* map = GET_ARG(0, GetMap);
+	ObjMap* map = thread->GetMap(args, 0);
 
 	return INTEGER_VAL((int)map->Keys->Count());
 }
@@ -81,7 +79,7 @@ VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
 VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 1);
 
-	ObjMap* map = GET_ARG(0, GetMap);
+	ObjMap* map = thread->GetMap(args, 0);
 
 	ObjArray* array = thread->Manager->NewArray();
 
@@ -101,7 +99,7 @@ VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
 VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 2);
 
-	ObjMap* map = GET_ARG(0, GetMap);
+	ObjMap* map = thread->GetMap(args, 0);
 	Uint32 hash = Value::Hash(args[1]);
 	map->Keys->Remove(hash);
 	map->Values->Remove(hash);
@@ -117,7 +115,7 @@ VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
 VMValue MapImpl::VM_Clear(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 1);
 
-	ObjMap* map = GET_ARG(0, GetMap);
+	ObjMap* map = thread->GetMap(args, 0);
 
 	map->Keys->Clear();
 	map->Values->Clear();
@@ -128,14 +126,14 @@ VMValue MapImpl::VM_Clear(int argCount, VMValue* args, VMThread* thread) {
 VMValue MapImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 2);
 
-	ObjMap* map = GET_ARG(0, GetMap);
+	ObjMap* map = thread->GetMap(args, 0);
 
 	int key;
 	if (IS_NULL(args[1])) {
 		key = map->Values->GetFirstKey();
 	}
 	else {
-		key = map->Values->GetNextKey(GET_ARG(1, GetInteger));
+		key = map->Values->GetNextKey(thread->GetInteger(args, 1));
 	}
 
 	if (key != 0xFFFFFFFF) {
@@ -148,8 +146,8 @@ VMValue MapImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 VMValue MapImpl::VM_IteratorValue(int argCount, VMValue* args, VMThread* thread) {
 	thread->CheckArgCount(argCount, 2);
 
-	ObjMap* map = GET_ARG(0, GetMap);
-	int key = GET_ARG(1, GetInteger);
+	ObjMap* map = thread->GetMap(args, 0);
+	int key = thread->GetInteger(args, 1);
 
 	VMValue value;
 	if (map->Values->GetIfExists(key, &value)) {
