@@ -31,7 +31,7 @@ Obj* FunctionImpl::New() {
 }
 
 #ifdef HSL_VM
-#define GET_ARG(argIndex, argFunction) (thread->Manager->argFunction(args, argIndex, thread))
+#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
 
 /***
  * \method Bind
@@ -43,7 +43,7 @@ Obj* FunctionImpl::New() {
  */
 VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
 	if (argCount < 1) {
-		ScriptManager::CheckAtLeastArgCount(argCount, 1, thread);
+		thread->CheckAtLeastArgCount(argCount, 1);
 		return NULL_VAL;
 	}
 
@@ -78,7 +78,7 @@ VMValue FunctionImpl::VM_Bind(int argCount, VMValue* args, VMThread* thread) {
  */
 VMValue FunctionImpl::VM_BindArguments(int argCount, VMValue* args, VMThread* thread) {
 	if (argCount < 1) {
-		ScriptManager::CheckAtLeastArgCount(argCount, 1, thread);
+		thread->CheckAtLeastArgCount(argCount, 1);
 		return NULL_VAL;
 	}
 

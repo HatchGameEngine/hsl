@@ -1093,228 +1093,6 @@ std::string ScriptManager::GetBytecodeFilenameForHash(Uint32 filenameHash) {
 }
 // #endregion
 
-#ifdef HSL_VM
-namespace ScriptTypes {
-int GetInteger(VMValue* args, int index, VMThread* thread) {
-	int value = 0;
-	switch (args[index].Type) {
-	case VAL_INTEGER:
-	case VAL_LINKED_INTEGER:
-		value = AS_INTEGER(args[index]);
-		break;
-	default:
-		VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-		    index + 1,
-		    GetTypeString(VAL_INTEGER),
-		    GetValueTypeString(args[index]));
-	}
-	return value;
-}
-float GetDecimal(VMValue* args, int index, VMThread* thread) {
-	float value = 0.0f;
-	switch (args[index].Type) {
-	case VAL_DECIMAL:
-	case VAL_LINKED_DECIMAL:
-		value = AS_DECIMAL(args[index]);
-		break;
-	case VAL_INTEGER:
-	case VAL_LINKED_INTEGER:
-		value = AS_DECIMAL(Value::CastAsDecimal(args[index]));
-		break;
-	default:
-		VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-		    index + 1,
-		    GetTypeString(VAL_DECIMAL),
-		    GetValueTypeString(args[index]));
-	}
-	return value;
-}
-char* GetString(VMValue* args, int index, VMThread* thread) {
-	char* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_STRING(args[index])) {
-			value = AS_CSTRING(args[index]);
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_STRING),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjString* GetVMString(VMValue* args, int index, VMThread* thread) {
-	ObjString* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_STRING(args[index])) {
-			value = AS_STRING(args[index]);
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-				index + 1,
-			    GetObjectTypeString(OBJ_STRING),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjArray* GetArray(VMValue* args, int index, VMThread* thread) {
-	ObjArray* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_ARRAY(args[index])) {
-			value = (ObjArray*)(AS_OBJECT(args[index]));
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_ARRAY),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjMap* GetMap(VMValue* args, int index, VMThread* thread) {
-	ObjMap* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_MAP(args[index])) {
-			value = (ObjMap*)(AS_OBJECT(args[index]));
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_MAP),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjBoundMethod* GetBoundMethod(VMValue* args, int index, VMThread* thread) {
-	ObjBoundMethod* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_BOUND_METHOD(args[index])) {
-			value = (ObjBoundMethod*)(AS_OBJECT(args[index]));
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_BOUND_METHOD),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjFunction* GetFunction(VMValue* args, int index, VMThread* thread) {
-	ObjFunction* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_FUNCTION(args[index])) {
-			value = (ObjFunction*)(AS_OBJECT(args[index]));
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_FUNCTION),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-VMValue GetCallable(VMValue* args, int index, VMThread* thread) {
-	VMValue value = NULL_VAL;
-	if (thread->Manager->Lock()) {
-		if (IS_CALLABLE(args[index])) {
-			value = args[index];
-		}
-		else {
-			VM_THROW_ERROR(
-			    "Expected argument %d to be of type callable instead of %s.",
-			    index + 1,
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjInstance* GetInstance(VMValue* args, int index, VMThread* thread) {
-	ObjInstance* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_INSTANCEABLE(args[index])) {
-			value = AS_INSTANCE(args[index]);
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    GetObjectTypeString(OBJ_INSTANCE),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-ObjStream* GetStream(VMValue* args, int index, VMThread* thread) {
-	ObjStream* value = NULL;
-	if (thread->Manager->Lock()) {
-		if (IS_STREAM(args[index])) {
-			value = AS_STREAM(args[index]);
-		}
-		else {
-			VM_THROW_ERROR("Expected argument %d to be of type %s instead of %s.",
-			    index + 1,
-			    Value::GetClassObjectName(thread->Manager->ImplStream->Class),
-			    GetValueTypeString(args[index]));
-		}
-		thread->Manager->Unlock();
-	}
-	return value;
-}
-} // namespace ScriptTypes
-
-// NOTE:
-// Integers specifically need to be whole integers.
-// Floats can be just any countable real number.
-int ScriptManager::GetInteger(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetInteger(args, index, thread);
-}
-float ScriptManager::GetDecimal(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetDecimal(args, index, thread);
-}
-char* ScriptManager::GetString(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetString(args, index, thread);
-}
-ObjString* ScriptManager::GetVMString(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetVMString(args, index, thread);
-}
-ObjArray* ScriptManager::GetArray(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetArray(args, index, thread);
-}
-ObjMap* ScriptManager::GetMap(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetMap(args, index, thread);
-}
-ObjInstance* ScriptManager::GetInstance(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetInstance(args, index, thread);
-}
-ObjFunction* ScriptManager::GetFunction(VMValue* args, int index, VMThread* thread) {
-	return ScriptTypes::GetFunction(args, index, thread);
-}
-
-void ScriptManager::CheckArgCount(int argCount, int expects, VMThread* thread) {
-	if (argCount != expects) {
-		VM_THROW_ERROR("Expected %d arguments but got %d.", expects, argCount);
-	}
-}
-void ScriptManager::CheckAtLeastArgCount(int argCount, int expects, VMThread* thread) {
-	if (argCount < expects) {
-		VM_THROW_ERROR("Expected at least %d arguments but got %d.", expects, argCount);
-	}
-}
-#endif
-
 #define ALLOCATE_OBJ(type, objectType) (type*)AllocateObject(sizeof(type), objectType)
 #define ALLOCATE(type, size) (type*)Memory::TrackedMalloc(#type, sizeof(type) * size)
 
@@ -1413,7 +1191,7 @@ ObjString* ScriptManager::CopyString(ObjString* string) {
 
 #ifdef HSL_VM
 VMValue ScriptManager::VM_GetClass(int argCount, VMValue* args, VMThread* thread) {
-	CheckArgCount(argCount, 1, thread);
+	thread->CheckArgCount(argCount, 1);
 
 	if (IS_OBJECT(args[0])) {
 		return OBJECT_VAL(AS_OBJECT(args[0])->Class);
@@ -1423,18 +1201,18 @@ VMValue ScriptManager::VM_GetClass(int argCount, VMValue* args, VMThread* thread
 }
 
 VMValue ScriptManager::VM_HasField(int argCount, VMValue* args, VMThread* thread) {
-	CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
-	const char* name = thread->Manager->GetString(args, 1, thread);
+	const char* name = thread->GetString(args, 1);
 	Uint32 hash = Murmur::EncryptString(name);
 
 	return INTEGER_VAL(thread->HasProperty(args[0], hash));
 }
 
 VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread) {
-	CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
-	const char* name = thread->Manager->GetString(args, 1, thread);
+	const char* name = thread->GetString(args, 1);
 	Uint32 hash = Murmur::EncryptString(name);
 
 	if (thread->HasProperty(args[0], hash))
@@ -1445,9 +1223,9 @@ VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread
 }
 
 VMValue ScriptManager::VM_SetField(int argCount, VMValue* args, VMThread* thread) {
-	CheckArgCount(argCount, 3, thread);
+	thread->CheckArgCount(argCount, 3);
 
-	const char* name = thread->Manager->GetString(args, 1, thread);
+	const char* name = thread->GetString(args, 1);
 	Uint32 hash = Murmur::EncryptString(name);
 
 	return thread->SetProperty(args[0], hash, args[2]);;

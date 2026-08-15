@@ -56,7 +56,7 @@ void MapImpl::Dispose(Obj* object) {
 }
 
 #ifdef HSL_VM
-#define GET_ARG(argIndex, argFunction) (thread->Manager->argFunction(args, argIndex, thread))
+#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
 
 /***
  * \method Length
@@ -65,7 +65,7 @@ void MapImpl::Dispose(Obj* object) {
  * \ns Map
  */
 VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 1, thread);
+	thread->CheckArgCount(argCount, 1);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 
@@ -79,7 +79,7 @@ VMValue MapImpl::VM_Length(int argCount, VMValue* args, VMThread* thread) {
  * \ns Map
  */
 VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 1, thread);
+	thread->CheckArgCount(argCount, 1);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 
@@ -99,7 +99,7 @@ VMValue MapImpl::VM_GetKeys(int argCount, VMValue* args, VMThread* thread) {
  * \ns Map
  */
 VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 	Uint32 hash = Value::Hash(args[1]);
@@ -115,7 +115,7 @@ VMValue MapImpl::VM_Remove(int argCount, VMValue* args, VMThread* thread) {
  * \ns Map
  */
 VMValue MapImpl::VM_Clear(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 1, thread);
+	thread->CheckArgCount(argCount, 1);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 
@@ -126,7 +126,7 @@ VMValue MapImpl::VM_Clear(int argCount, VMValue* args, VMThread* thread) {
 }
 
 VMValue MapImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 
@@ -146,7 +146,7 @@ VMValue MapImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 }
 
 VMValue MapImpl::VM_IteratorValue(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
 	ObjMap* map = GET_ARG(0, GetMap);
 	int key = GET_ARG(1, GetInteger);

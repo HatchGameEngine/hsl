@@ -181,8 +181,6 @@ public:
 	ObjMap* GetMap(VMValue* args, int index, VMThread* thread);
 	ObjInstance* GetInstance(VMValue* args, int index, VMThread* thread);
 	ObjFunction* GetFunction(VMValue* args, int index, VMThread* thread);
-	static void CheckArgCount(int argCount, int expects, VMThread* thread);
-	static void CheckAtLeastArgCount(int argCount, int expects, VMThread* thread);
 #endif
 
 #ifdef HSL_VM
@@ -229,20 +227,6 @@ public:
 
 #ifdef HSL_VM
 #define VM_THROW_ERROR(...) thread->ThrowRuntimeError(false, __VA_ARGS__)
-
-namespace ScriptTypes {
-int GetInteger(VMValue* args, int index, VMThread* thread);
-float GetDecimal(VMValue* args, int index, VMThread* thread);
-char* GetString(VMValue* args, int index, VMThread* thread);
-ObjString* GetVMString(VMValue* args, int index, VMThread* thread);
-ObjArray* GetArray(VMValue* args, int index, VMThread* thread);
-ObjMap* GetMap(VMValue* args, int index, VMThread* thread);
-ObjBoundMethod* GetBoundMethod(VMValue* args, int index, VMThread* thread);
-ObjFunction* GetFunction(VMValue* args, int index, VMThread* thread);
-VMValue GetCallable(VMValue* args, int index, VMThread* thread);
-ObjInstance* GetInstance(VMValue* args, int index, VMThread* thread);
-ObjStream* GetStream(VMValue* args, int index, VMThread* thread);
-} // namespace ScriptTypes
 #endif
 
 #endif /* HSL_SCRIPTMANAGER_H */

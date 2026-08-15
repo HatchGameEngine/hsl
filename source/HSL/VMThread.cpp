@@ -3869,3 +3869,220 @@ bool VMThread::DoDecimalConversion(VMValue& value) {
 	value = result;
 	return true;
 }
+
+bool VMThread::CheckArgCount(int argCount, int expects) {
+	if (argCount != expects) {
+		ThrowRuntimeError(false,
+			"Expected %d arguments but got %d.",
+			expects,
+			argCount);
+
+		return false;
+	}
+
+	return true;
+}
+bool VMThread::CheckAtLeastArgCount(int argCount, int expects) {
+	if (argCount < expects) {
+		ThrowRuntimeError(false,
+			"Expected at least %d arguments but got %d.",
+			expects,
+			argCount);
+
+		return false;
+	}
+
+	return true;
+}
+
+// NOTE:
+// Integers specifically need to be whole integers.
+// Floats can be just any countable real number.
+int VMThread::GetInteger(VMValue* args, int index) {
+	int value = 0;
+	switch (args[index].Type) {
+	case VAL_INTEGER:
+	case VAL_LINKED_INTEGER:
+		value = AS_INTEGER(args[index]);
+		break;
+	default:
+		ThrowRuntimeError(false,
+			"Expected argument %d to be of type %s instead of %s.",
+		    index + 1,
+		    GetTypeString(VAL_INTEGER),
+		    GetValueTypeString(args[index]));
+	}
+	return value;
+}
+float VMThread::GetDecimal(VMValue* args, int index) {
+	float value = 0.0f;
+	switch (args[index].Type) {
+	case VAL_DECIMAL:
+	case VAL_LINKED_DECIMAL:
+		value = AS_DECIMAL(args[index]);
+		break;
+	case VAL_INTEGER:
+	case VAL_LINKED_INTEGER:
+		value = AS_DECIMAL(Value::CastAsDecimal(args[index]));
+		break;
+	default:
+		ThrowRuntimeError(false,
+			"Expected argument %d to be of type %s instead of %s.",
+		    index + 1,
+		    GetTypeString(VAL_DECIMAL),
+		    GetValueTypeString(args[index]));
+	}
+	return value;
+}
+char* VMThread::GetString(VMValue* args, int index) {
+	char* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_STRING(args[index])) {
+			value = AS_CSTRING(args[index]);
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_STRING),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjString* VMThread::GetVMString(VMValue* args, int index) {
+	ObjString* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_STRING(args[index])) {
+			value = AS_STRING(args[index]);
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+				index + 1,
+			    GetObjectTypeString(OBJ_STRING),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjArray* VMThread::GetArray(VMValue* args, int index) {
+	ObjArray* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_ARRAY(args[index])) {
+			value = (ObjArray*)(AS_OBJECT(args[index]));
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_ARRAY),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjMap* VMThread::GetMap(VMValue* args, int index) {
+	ObjMap* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_MAP(args[index])) {
+			value = (ObjMap*)(AS_OBJECT(args[index]));
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_MAP),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjBoundMethod* VMThread::GetBoundMethod(VMValue* args, int index) {
+	ObjBoundMethod* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_BOUND_METHOD(args[index])) {
+			value = (ObjBoundMethod*)(AS_OBJECT(args[index]));
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_BOUND_METHOD),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjFunction* VMThread::GetFunction(VMValue* args, int index) {
+	ObjFunction* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_FUNCTION(args[index])) {
+			value = (ObjFunction*)(AS_OBJECT(args[index]));
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_FUNCTION),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+VMValue VMThread::GetCallable(VMValue* args, int index) {
+	VMValue value = NULL_VAL;
+	if (Manager->Lock()) {
+		if (IS_CALLABLE(args[index])) {
+			value = args[index];
+		}
+		else {
+			ThrowRuntimeError(false,
+			    "Expected argument %d to be of type callable instead of %s.",
+			    index + 1,
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjInstance* VMThread::GetInstance(VMValue* args, int index) {
+	ObjInstance* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_INSTANCEABLE(args[index])) {
+			value = AS_INSTANCE(args[index]);
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    GetObjectTypeString(OBJ_INSTANCE),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}
+ObjStream* VMThread::GetStream(VMValue* args, int index) {
+	ObjStream* value = NULL;
+	if (Manager->Lock()) {
+		if (IS_STREAM(args[index])) {
+			value = AS_STREAM(args[index]);
+		}
+		else {
+			ThrowRuntimeError(false,
+				"Expected argument %d to be of type %s instead of %s.",
+			    index + 1,
+			    Value::GetClassObjectName(Manager->ImplStream->Class),
+			    GetValueTypeString(args[index]));
+		}
+		Manager->Unlock();
+	}
+	return value;
+}

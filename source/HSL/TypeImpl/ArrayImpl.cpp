@@ -35,7 +35,7 @@ Obj* ArrayImpl::Constructor(VMThread* thread) {
 	return thread->Manager->ImplArray->Allocate();
 }
 
-#define GET_ARG(argIndex, argFunction) (thread->Manager->argFunction(args, argIndex, thread))
+#define GET_ARG(argIndex, argFunction) (thread->argFunction(args, argIndex))
 
 #ifdef HSL_VM
 /***
@@ -48,7 +48,7 @@ Obj* ArrayImpl::Constructor(VMThread* thread) {
 VMValue ArrayImpl::VM_Initializer(int argCount, VMValue* args, VMThread* thread) {
 	ObjArray* array = AS_ARRAY(args[0]);
 
-	ScriptManager::CheckAtLeastArgCount(argCount, 1, thread);
+	thread->CheckAtLeastArgCount(argCount, 1);
 
 	int length = 0;
 	VMValue initialValue = NULL_VAL;
@@ -78,7 +78,7 @@ void ArrayImpl::Dispose(Obj* object) {
 
 #ifdef HSL_VM
 VMValue ArrayImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
 	ObjArray* array = GET_ARG(0, GetArray);
 
@@ -96,7 +96,7 @@ VMValue ArrayImpl::VM_Iterate(int argCount, VMValue* args, VMThread* thread) {
 }
 
 VMValue ArrayImpl::VM_IteratorValue(int argCount, VMValue* args, VMThread* thread) {
-	ScriptManager::CheckArgCount(argCount, 2, thread);
+	thread->CheckArgCount(argCount, 2);
 
 	ObjArray* array = GET_ARG(0, GetArray);
 	int index = GET_ARG(1, GetInteger);

@@ -142,8 +142,24 @@ public:
 	VMValue Values_LogicalNOT();
 	VMValue Values_BitwiseNOT();
 	VMValue Value_TypeOf();
+
 	bool DoIntegerConversion(VMValue& value);
 	bool DoDecimalConversion(VMValue& value);
+
+	bool CheckArgCount(int argCount, int expects);
+	bool CheckAtLeastArgCount(int argCount, int expects);
+
+	int GetInteger(VMValue* args, int index);
+	float GetDecimal(VMValue* args, int index);
+	char* GetString(VMValue* args, int index);
+	ObjString* GetVMString(VMValue* args, int index);
+	ObjArray* GetArray(VMValue* args, int index);
+	ObjMap* GetMap(VMValue* args, int index);
+	ObjBoundMethod* GetBoundMethod(VMValue* args, int index);
+	ObjFunction* GetFunction(VMValue* args, int index);
+	VMValue GetCallable(VMValue* args, int index);
+	ObjInstance* GetInstance(VMValue* args, int index);
+	ObjStream* GetStream(VMValue* args, int index);
 
 #if USING_VM_FUNCPTRS
 	int RunOpcodeFunc(CallFrame* frame);
