@@ -2464,6 +2464,24 @@ VMValue VMThread::GetProperty(VMValue object, Uint32 hash) {
 			return NULL_VAL;
 		}
 	}
+	// Otherwise, if it's an enum,
+	else if (IS_ENUM(object)) {
+		ObjEnum* enumObj = AS_ENUM(object);
+
+		if (Manager->Lock()) {
+			if (enumObj->Fields->GetIfExists(hash, &result)) {
+				result = Value::Delink(result);
+				Manager->Unlock();
+				return result;
+			}
+
+			ThrowRuntimeError(false,
+				"Could not find %s in enumeration!",
+				GetVariableOrMethodName(hash));
+			Manager->Unlock();
+			return NULL_VAL;
+		}
+	}
 	// Otherwise, if it's a namespace,
 	else if (IS_NAMESPACE(object)) {
 		ObjNamespace* ns = AS_NAMESPACE(object);
