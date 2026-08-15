@@ -198,7 +198,7 @@ void VMThread::MakeErrorMessage(PrintBuffer* buffer, const char* errorString) {
 int VMThread::Error(const char* errorString, bool fatal) {
 	int errResult = ERROR_RES_EXIT;
 
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
 	buffer.WriteIndex = 0;
@@ -210,7 +210,7 @@ int VMThread::Error(const char* errorString, bool fatal) {
 	Log::Print(Log::LOG_ERROR, textBuffer);
 
 	if (InREPL()) {
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 		return ERROR_RES_CONTINUE;
 	}
 
@@ -225,7 +225,7 @@ int VMThread::Error(const char* errorString, bool fatal) {
 #else
 	StandaloneExit(std::string(textBuffer));
 #endif
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 	return errResult;
 }
 int VMThread::ThrowRuntimeError(const char* errorMessage, ...) {
@@ -249,7 +249,7 @@ int VMThread::FatalError(const char* errorMessage, ...) {
 int VMThread::ShowErrorFromScript(const char* errorString, bool detailed) {
 	int errResult = ERROR_RES_EXIT;
 
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
 	buffer.WriteIndex = 0;
@@ -266,7 +266,7 @@ int VMThread::ShowErrorFromScript(const char* errorString, bool detailed) {
 	Log::Print(Log::LOG_ERROR, textBuffer);
 
 	if (InREPL()) {
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 		return ERROR_RES_CONTINUE;
 	}
 #endif
@@ -279,11 +279,11 @@ int VMThread::ShowErrorFromScript(const char* errorString, bool detailed) {
 #else
 	StandaloneExit(std::string(textBuffer));
 #endif
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 	return errResult;
 }
 void VMThread::ShowErrorLocation(const char* errorMessage) {
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
 	buffer.WriteIndex = 0;
@@ -293,7 +293,7 @@ void VMThread::ShowErrorLocation(const char* errorMessage) {
 
 	Log::Print(Log::LOG_ERROR, textBuffer);
 
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 
 	PrintStack();
 }
@@ -359,7 +359,7 @@ bool VMThread::ShowBranchLimitMessage(const char* errorMessage, ...) {
 	vsnprintf(errorString, sizeof(errorString), errorMessage, args);
 	va_end(args);
 
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
 	buffer.WriteIndex = 0;
@@ -371,7 +371,7 @@ bool VMThread::ShowBranchLimitMessage(const char* errorMessage, ...) {
 	Log::Print(Log::LOG_WARN, textBuffer);
 
 	if (InREPL()) {
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 		return true;
 	}
 
@@ -379,7 +379,7 @@ bool VMThread::ShowBranchLimitMessage(const char* errorMessage, ...) {
 #endif
 
 	if (InstructionIgnoreMap[000000001]) {
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 		return false;
 	}
 
@@ -391,7 +391,7 @@ bool VMThread::ShowBranchLimitMessage(const char* errorMessage, ...) {
 #else
 	StandaloneExit(std::string(textBuffer));
 #endif
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 
 	return errResult;
 }
@@ -461,7 +461,7 @@ bool VMThread::RemoveBreakpoint(int index) {
 void VMThread::AddFunctionBreakpoints(ObjFunction* function) {
 	Chunk* chunk = &function->Chunk;
 
-	Uint8* breakpoints = (Uint8*)Memory::Calloc(chunk->Count, sizeof(Uint8));
+	Uint8* breakpoints = (Uint8*)MEMORY_CALLOC(chunk->Count, sizeof(Uint8));
 
 	BreakpointsPerFunction[function] = breakpoints;
 
@@ -476,7 +476,7 @@ void VMThread::AddFunctionBreakpoints(ObjFunction* function) {
 void VMThread::RemoveBreakpointsForFunction(ObjFunction* function) {
 	auto it = BreakpointsPerFunction.find(function);
 	if (it != BreakpointsPerFunction.end()) {
-		Memory::Free(it->second);
+		MEMORY_FREE(it->second);
 		BreakpointsPerFunction.erase(function);
 	}
 
@@ -508,7 +508,7 @@ void VMThread::DisposeBreakpoints() {
 
 	std::unordered_map<ObjFunction*, Uint8*>::iterator it;
 	for (it = BreakpointsPerFunction.begin(); it != BreakpointsPerFunction.end(); it++) {
-		Memory::Free(it->second);
+		MEMORY_FREE(it->second);
 	}
 	BreakpointsPerFunction.clear();
 }
@@ -1264,7 +1264,7 @@ int VMThread::RunInstruction() {
 	VM_CASE(OP_PRINT) {
 		VMValue v = Peek(0);
 
-		char* textBuffer = (char*)malloc(64);
+		char* textBuffer = (char*)MEMORY_ALLOC(64);
 
 		PrintBuffer buffer;
 		buffer.Buffer = &textBuffer;
@@ -1278,7 +1278,7 @@ int VMThread::RunInstruction() {
 		Log::PrintSimple("%s\n", textBuffer);
 #endif
 
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 
 		Pop();
 		VM_BREAK;

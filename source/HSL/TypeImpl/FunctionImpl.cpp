@@ -24,7 +24,6 @@ Obj* FunctionImpl::Constructor(VMThread* thread) {
 
 Obj* FunctionImpl::New() {
 	ObjFunction* function = (ObjFunction*)Manager->AllocateObject(sizeof(ObjFunction), OBJ_FUNCTION);
-	Memory::Track(function, "NewFunction");
 	function->Object.Class = Class;
 	function->Chunk.Init();
 	return (Obj*)function;

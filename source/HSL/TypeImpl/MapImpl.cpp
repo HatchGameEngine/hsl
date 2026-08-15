@@ -29,7 +29,6 @@ MapImpl::MapImpl(ScriptManager* manager) {
 
 Obj* MapImpl::Allocate() {
 	ObjMap* map = (ObjMap*)Manager->AllocateObject(sizeof(ObjMap), OBJ_MAP);
-	Memory::Track(map, "NewMap");
 	map->Object.Class = Class;
 	map->Values = new OrderedHashMap<VMValue>(NULL, 4);
 	map->Keys = new OrderedHashMap<VMValue>(NULL, 4);

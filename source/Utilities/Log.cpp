@@ -93,20 +93,20 @@ void Log::Close() {
 		File = nullptr;
 	}
 	if (Buffer) {
-		free(Buffer);
+		MEMORY_FREE(Buffer);
 		Buffer = nullptr;
 	}
 }
 
 bool Log::ResizeBuffer(int written_chars) {
 	BufferSize = written_chars + 1024;
-	Buffer = (char*)realloc(Buffer, BufferSize * sizeof(char));
+	Buffer = (char*)MEMORY_REALLOC(Buffer, BufferSize * sizeof(char));
 
 	// If the reallocation failed, try again with a smaller buffer
 	// size
 	if (Buffer == nullptr) {
 		BufferSize = 1024;
-		Buffer = (char*)realloc(Buffer, BufferSize * sizeof(char));
+		Buffer = (char*)MEMORY_REALLOC(Buffer, BufferSize * sizeof(char));
 
 		// If that failed too, just give up.
 		if (!Buffer) {

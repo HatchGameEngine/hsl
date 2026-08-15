@@ -3,7 +3,7 @@
 #include <Utilities/StringUtils.h>
 
 char* StringUtils::Create(void* src, size_t length) {
-	char* string = (char*)Memory::Malloc(length + 1);
+	char* string = (char*)MEMORY_ALLOC(length + 1);
 	memcpy(string, src, length);
 	string[length] = '\0';
 	return string;
@@ -14,7 +14,7 @@ char* StringUtils::Create(std::string src) {
 
 char* StringUtils::Duplicate(const char* src) {
 	size_t length = strlen(src) + 1;
-	char* string = (char*)Memory::Malloc(length);
+	char* string = (char*)MEMORY_ALLOC(length);
 	memcpy(string, src, length);
 	return string;
 }

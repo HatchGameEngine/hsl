@@ -209,7 +209,7 @@ void VMThreadDebugger::MainLoop() {
 		// Interpret the line
 		InterpretCommand(args, read.c_str());
 
-		Memory::Free(line);
+		MEMORY_FREE(line);
 	}
 }
 

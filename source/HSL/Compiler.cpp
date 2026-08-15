@@ -760,7 +760,7 @@ bool Compiler::ReportError(int line, int pos, bool fatal, const char* string, ..
 	vsnprintf(message, sizeof message, string, args);
 	va_end(args);
 
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
@@ -787,13 +787,13 @@ bool Compiler::ReportError(int line, int pos, bool fatal, const char* string, ..
 		else {
 			printf("%s\n", textBuffer);
 		}
-		free(textBuffer);
+		MEMORY_FREE(textBuffer);
 		return true;
 	}
 
 	std::string error = std::string(textBuffer);
 
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 
 	throw CompilerErrorException(error);
 }
@@ -839,7 +839,7 @@ void Compiler::WarningInFunction(const char* format, ...) {
 	vsnprintf(message, sizeof message, format, args);
 	va_end(args);
 
-	char* textBuffer = (char*)malloc(512);
+	char* textBuffer = (char*)MEMORY_ALLOC(512);
 
 	PrintBuffer buffer;
 	buffer.Buffer = &textBuffer;
@@ -869,7 +869,7 @@ void Compiler::WarningInFunction(const char* format, ...) {
 		printf("%s\n", textBuffer);
 	}
 
-	free(textBuffer);
+	MEMORY_FREE(textBuffer);
 }
 
 int Compiler::ParseVariable(const char* errorMessage, bool constant) {
@@ -1221,12 +1221,12 @@ bool Compiler::MakeIndirectPropertyChainDirect(Chunk* chunk, Uint8* op, int inde
 			int code_block_length = chunk->Count - code_block_start;
 
 			// Copy code block
-			code_block_copy = (Uint8*)malloc(code_block_length * sizeof(Uint8));
+			code_block_copy = (Uint8*)MEMORY_ALLOC(code_block_length * sizeof(Uint8));
 			memcpy(code_block_copy, &chunk->Code[code_block_start], code_block_length * sizeof(Uint8));
 			code_block_copy[0] = OP_GET_PROPERTY;
 
 			// Copy line info block
-			line_block_copy = (int*)malloc(code_block_length * sizeof(int));
+			line_block_copy = (int*)MEMORY_ALLOC(code_block_length * sizeof(int));
 			memcpy(line_block_copy, &chunk->Lines[code_block_start], code_block_length * sizeof(int));
 
 			*last = direct;
@@ -1236,8 +1236,8 @@ bool Compiler::MakeIndirectPropertyChainDirect(Chunk* chunk, Uint8* op, int inde
 			for (int i = 0; i < code_block_length; i++) {
 				chunk->Write(code_block_copy[i], line_block_copy[i]);
 			}
-			free(code_block_copy);
-			free(line_block_copy);
+			MEMORY_FREE(code_block_copy);
+			MEMORY_FREE(line_block_copy);
 
 			for (size_t i = 0; i < propOp.size(); i++) {
 				propOp[i]++;
@@ -2396,11 +2396,11 @@ void Compiler::GetSwitchStatement() {
 	code_block_length = CodePointer() - code_block_start;
 
 	// Copy code block
-	code_block_copy = (Uint8*)malloc(code_block_length * sizeof(Uint8));
+	code_block_copy = (Uint8*)MEMORY_ALLOC(code_block_length * sizeof(Uint8));
 	memcpy(code_block_copy, &chunk->Code[code_block_start], code_block_length * sizeof(Uint8));
 
 	// Copy line info block
-	line_block_copy = (int*)malloc(code_block_length * sizeof(int));
+	line_block_copy = (int*)MEMORY_ALLOC(code_block_length * sizeof(int));
 	memcpy(line_block_copy, &chunk->Lines[code_block_start], code_block_length * sizeof(int));
 
 	chunk->Count -= code_block_length;
@@ -2451,8 +2451,8 @@ void Compiler::GetSwitchStatement() {
 	for (int i = 0; i < code_block_length; i++) {
 		chunk->Write(code_block_copy[i], line_block_copy[i]);
 	}
-	free(code_block_copy);
-	free(line_block_copy);
+	MEMORY_FREE(code_block_copy);
+	MEMORY_FREE(line_block_copy);
 
 	if (exitJump != -1) {
 		PatchJump(exitJump);
@@ -2521,13 +2521,13 @@ void Compiler::GetCaseStatement() {
 	case_info.CodeLength = code_block_length;
 
 	// Copy code block
-	case_info.CodeBlock = (Uint8*)malloc(code_block_length * sizeof(Uint8));
+	case_info.CodeBlock = (Uint8*)MEMORY_ALLOC(code_block_length * sizeof(Uint8));
 	memcpy(case_info.CodeBlock,
 		&chunk->Code[code_block_start],
 		code_block_length * sizeof(Uint8));
 
 	// Copy line info block
-	case_info.LineBlock = (int*)malloc(code_block_length * sizeof(int));
+	case_info.LineBlock = (int*)MEMORY_ALLOC(code_block_length * sizeof(int));
 	memcpy(case_info.LineBlock,
 		&chunk->Lines[code_block_start],
 		code_block_length * sizeof(int));
@@ -3515,8 +3515,7 @@ void Compiler::GetDeclaration() {
 }
 
 void Compiler::MakeRules() {
-	Rules = (ParseRule*)Memory::TrackedCalloc(
-		"Compiler::Rules", TOKEN_EOF + 1, sizeof(ParseRule));
+	Rules = (ParseRule*)MEMORY_CALLOC(TOKEN_EOF + 1, sizeof(ParseRule));
 	// Single-character tokens.
 	Rules[TOKEN_LEFT_PAREN] =
 		ParseRule{&Compiler::GetGrouping, &Compiler::GetCall, PREC_CALL};
@@ -3842,8 +3841,8 @@ void Compiler::EndSwitchJumpList() {
 	vector<switch_case>* top = SwitchJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		if (!(*top)[i].IsDefault) {
-			free((*top)[i].CodeBlock);
-			free((*top)[i].LineBlock);
+			MEMORY_FREE((*top)[i].CodeBlock);
+			MEMORY_FREE((*top)[i].LineBlock);
 		}
 	}
 	delete top;
@@ -4677,7 +4676,7 @@ void Compiler::AddBreakpointsToChunk(Chunk* chunk) {
 		return;
 	}
 
-	chunk->Breakpoints = (Uint32*)Memory::Calloc(chunk->BreakpointCount, sizeof(Uint32));
+	chunk->Breakpoints = (Uint32*)MEMORY_CALLOC(chunk->BreakpointCount, sizeof(Uint32));
 
 	for (Uint16 i = 0; i < chunk->BreakpointCount; i++) {
 		chunk->Breakpoints[i] = Breakpoints[i];
@@ -4700,7 +4699,7 @@ void Compiler::Dispose() {
 		StandardConstants = NULL;
 	}
 	if (Rules) {
-		Memory::Free(Rules);
+		MEMORY_FREE(Rules);
 		Rules = NULL;
 	}
 }

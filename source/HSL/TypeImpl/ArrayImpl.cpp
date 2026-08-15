@@ -25,7 +25,6 @@ ArrayImpl::ArrayImpl(ScriptManager* manager) {
 
 Obj* ArrayImpl::Allocate() {
 	ObjArray* array = (ObjArray*)Manager->AllocateObject(sizeof(ObjArray), OBJ_ARRAY);
-	Memory::Track(array, "NewArray");
 	array->Object.Class = Class;
 	array->Values = new vector<VMValue>();
 	return (Obj*)array;

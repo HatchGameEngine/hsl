@@ -65,7 +65,7 @@ hsl_Result hsl_compile_internal(Compiler* compiler, const char* code, MemoryStre
 	Compiler::PrepareCompiling();
 
 	if (compiler->Manager->LastCompileError) {
-		Memory::Free(compiler->Manager->LastCompileError);
+		MEMORY_FREE(compiler->Manager->LastCompileError);
 		compiler->Manager->LastCompileError = nullptr;
 	}
 
@@ -96,7 +96,7 @@ hsl_Result hsl_compile(hsl_Compiler* compiler, const char* code, char** out_byte
 	}
 
 	*out_size = memStream->Position();
-	*out_bytecode = (char*)malloc(*out_size);
+	*out_bytecode = (char*)MEMORY_ALLOC(*out_size);
 
 	memStream->Seek(0);
 	memStream->ReadBytes(*out_bytecode, *out_size);

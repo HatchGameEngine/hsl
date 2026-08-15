@@ -1,4 +1,5 @@
 #include <Utilities/Log.h>
+#include <Utilities/Memory.h>
 #include <Utilities/PrintBuffer.h>
 
 int buffer_printf(PrintBuffer* printBuffer, const char* format, ...) {
@@ -24,7 +25,7 @@ int buffer_printf(PrintBuffer* printBuffer, const char* format, ...) {
 
 		// Reallocate buffer
 		*printBuffer->Buffer =
-			(char*)realloc(*printBuffer->Buffer, printBuffer->BufferSize);
+			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
 			Log::Print(Log::LOG_ERROR,
 				"Could not reallocate print buffer of size %d!",
@@ -58,7 +59,7 @@ int buffer_write(PrintBuffer* printBuffer, const char* string) {
 
 		// Reallocate buffer
 		*printBuffer->Buffer =
-			(char*)realloc(*printBuffer->Buffer, printBuffer->BufferSize);
+			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
 			Log::Print(Log::LOG_ERROR,
 				"Could not reallocate print buffer of size %d!",
@@ -85,7 +86,7 @@ int buffer_write(PrintBuffer* printBuffer, char chr) {
 
 		// Reallocate buffer
 		*printBuffer->Buffer =
-			(char*)realloc(*printBuffer->Buffer, printBuffer->BufferSize);
+			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
 			Log::Print(Log::LOG_ERROR,
 				"Could not reallocate print buffer of size %d!",

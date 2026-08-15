@@ -126,14 +126,14 @@ std::string Value::ToString(VMValue v) {
 		return std::string(AS_CSTRING(v));
 	}
 
-	char* buffer = (char*)malloc(512);
+	char* buffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer_info;
 	buffer_info.Buffer = &buffer;
 	buffer_info.WriteIndex = 0;
 	buffer_info.BufferSize = 512;
 	ValuePrinter::Print(&buffer_info, v, false);
 	std::string result(buffer, buffer_info.WriteIndex);
-	free(buffer);
+	MEMORY_FREE(buffer);
 	return result;
 }
 VMValue Value::CastAsInteger(VMValue v) {

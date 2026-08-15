@@ -25,7 +25,6 @@ Obj* StringImpl::Constructor(VMThread* thread) {
 
 Obj* StringImpl::New(char* chars, size_t length) {
 	ObjString* string = (ObjString*)Manager->AllocateObject(sizeof(ObjString), OBJ_STRING);
-	Memory::Track(string, "NewString");
 	string->Object.Class = Class;
 	string->Length = length;
 	string->Chars = chars;
@@ -35,7 +34,7 @@ Obj* StringImpl::New(char* chars, size_t length) {
 void StringImpl::Dispose(Obj* object) {
 	ObjString* string = (ObjString*)object;
 
-	Memory::Free(string->Chars);
+	MEMORY_FREE(string->Chars);
 }
 
 #ifdef HSL_VM

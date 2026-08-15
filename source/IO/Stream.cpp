@@ -104,7 +104,7 @@ char* Stream::ReadLine() {
 
 	size_t size = Position() - start;
 
-	char* data = (char*)Memory::TrackedMalloc("Stream::ReadLine", size + 1);
+	char* data = (char*)MEMORY_ALLOC(size + 1);
 
 	if (size > 0) {
 		Skip(-size);
@@ -122,7 +122,7 @@ char* Stream::ReadString() {
 
 	size_t size = Position() - start;
 
-	char* data = (char*)Memory::TrackedMalloc("Stream::ReadString", size + 1);
+	char* data = (char*)MEMORY_ALLOC(size + 1);
 
 	if (size > 0) {
 		Skip(-size);
@@ -146,11 +146,10 @@ Uint16* Stream::ReadUnicodeString() {
 
 	size_t size = Position() - start;
 	if (size == 0) {
-		data = (Uint16*)Memory::TrackedCalloc(
-			"Stream::ReadUnicodeString", 1, sizeof(Uint16));
+		data = (Uint16*)MEMORY_CALLOC(1, sizeof(Uint16));
 	}
 	else {
-		data = (Uint16*)Memory::TrackedMalloc("Stream::ReadUnicodeString", size);
+		data = (Uint16*)MEMORY_ALLOC(size);
 		Skip(-size);
 		ReadBytes(data, size);
 	}
@@ -160,7 +159,7 @@ Uint16* Stream::ReadUnicodeString() {
 char* Stream::ReadHeaderedString() {
 	Uint8 size = ReadByte();
 
-	char* data = (char*)Memory::TrackedMalloc("Stream::ReadHeaderedString", size + 1);
+	char* data = (char*)MEMORY_ALLOC(size + 1);
 	if (size > 0) {
 		ReadBytes(data, size);
 	}
@@ -173,11 +172,11 @@ Uint32 Stream::ReadCompressed(void* out) {
 	Uint32 compressed_size = ReadUInt32() - 4;
 	Uint32 uncompressed_size = ReadUInt32BE();
 
-	void* buffer = Memory::Malloc(compressed_size);
+	void* buffer = MEMORY_ALLOC(compressed_size);
 	ReadBytes(buffer, compressed_size);
 
 	ZLibStream::Decompress(out, uncompressed_size, buffer, compressed_size);
-	Memory::Free(buffer);
+	MEMORY_FREE(buffer);
 
 	return uncompressed_size;
 #else
@@ -189,11 +188,11 @@ Uint32 Stream::ReadCompressed(void* out, size_t outSz) {
 	Uint32 compressed_size = ReadUInt32() - 4;
 	ReadUInt32BE(); // uncompressed_size
 
-	void* buffer = Memory::Malloc(compressed_size);
+	void* buffer = MEMORY_ALLOC(compressed_size);
 	ReadBytes(buffer, compressed_size);
 
 	ZLibStream::Decompress(out, outSz, buffer, compressed_size);
-	Memory::Free(buffer);
+	MEMORY_FREE(buffer);
 
 	return (Uint32)outSz;
 #else
@@ -260,12 +259,12 @@ void Stream::WriteHeaderedString(const char* string) {
 }
 
 size_t Stream::CopyTo(Stream* dest, size_t n) {
-	void* memory = Memory::Malloc(n);
+	void* memory = MEMORY_ALLOC(n);
 
 	ReadBytes(memory, n);
 	size_t written = dest->WriteBytes(memory, n);
 
-	Memory::Free(memory);
+	MEMORY_FREE(memory);
 
 	return written;
 }

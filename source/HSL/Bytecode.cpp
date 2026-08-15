@@ -105,7 +105,7 @@ Bytecode::Bytecode() {
 }
 
 Bytecode::~Bytecode() {
-	Memory::Free(SourceFilename);
+	MEMORY_FREE(SourceFilename);
 }
 
 bool Bytecode::Read(Stream* stream, ScriptManager* manager, HashMap<char*>* tokens) {
@@ -156,7 +156,7 @@ bool Bytecode::Read(Stream* stream, ScriptManager* manager, HashMap<char*>* toke
 					tokens->Put(hash, string);
 				}
 				else {
-					Memory::Free(string);
+					MEMORY_FREE(string);
 				}
 			}
 
@@ -231,11 +231,11 @@ ObjFunction* Bytecode::ReadChunk(Stream* stream, ScriptManager* manager, std::ve
 	chunk->OpcodeCount = opcodeCount;
 	chunk->OwnsMemory = true;
 
-	chunk->Code = (Uint8*)Memory::Malloc(length * sizeof(Uint8));
+	chunk->Code = (Uint8*)MEMORY_ALLOC(length * sizeof(Uint8));
 	stream->ReadBytes(chunk->Code, length * sizeof(Uint8));
 
 	if (HasDebugInfo) {
-		chunk->Lines = (int*)Memory::Malloc(length * sizeof(int));
+		chunk->Lines = (int*)MEMORY_ALLOC(length * sizeof(int));
 		stream->ReadBytes(chunk->Lines, length * sizeof(int));
 	}
 
@@ -287,7 +287,7 @@ ObjFunction* Bytecode::ReadChunk(Stream* stream, ScriptManager* manager, std::ve
 	if (Flags & BYTECODE_FLAG_BREAKPOINTS) {
 		chunk->BreakpointCount = stream->ReadUInt16();
 		if (chunk->BreakpointCount) {
-			chunk->Breakpoints = (Uint32*)Memory::Calloc(chunk->BreakpointCount, sizeof(Uint32));
+			chunk->Breakpoints = (Uint32*)MEMORY_CALLOC(chunk->BreakpointCount, sizeof(Uint32));
 			for (Uint16 i = 0; i < chunk->BreakpointCount; i++) {
 				chunk->Breakpoints[i] = stream->ReadUInt32();
 			}

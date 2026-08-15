@@ -147,7 +147,7 @@ ScriptManager::~ScriptManager() {
 	HasWithIteratorHandler = false;
 
 	if (LastCompileError) {
-		Memory::Free(LastCompileError);
+		MEMORY_FREE(LastCompileError);
 		LastCompileError = nullptr;
 	}
 #endif
@@ -189,7 +189,7 @@ ScriptManager::~ScriptManager() {
 
 	if (Sources) {
 		Sources->WithAll([](Uint32 hash, BytecodeContainer bytecode) -> void {
-			Memory::Free(bytecode.Data);
+			MEMORY_FREE(bytecode.Data);
 		});
 		Sources->Clear();
 		delete Sources;
@@ -207,7 +207,7 @@ ScriptManager::~ScriptManager() {
 	}
 	if (Tokens) {
 		Tokens->WithAll([](Uint32 hash, char* token) -> void {
-			Memory::Free(token);
+			MEMORY_FREE(token);
 		});
 		Tokens->Clear();
 		delete Tokens;
@@ -222,7 +222,7 @@ ScriptManager::~ScriptManager() {
 #ifdef VM_DEBUG
 	if (SourceFiles) {
 		SourceFiles->WithAll([](Uint32, SourceFile* sourceFile) -> void {
-			Memory::Free(sourceFile->Text);
+			MEMORY_FREE(sourceFile->Text);
 			delete sourceFile;
 		});
 		SourceFiles->Clear();
@@ -270,7 +270,7 @@ void ScriptManager::Dispose() {
 void ScriptManager::FreeFunction(Obj* object) {
 	ObjFunction* function = (ObjFunction*)object;
 
-	Memory::Free(function->Name);
+	MEMORY_FREE(function->Name);
 
 	function->Chunk.Free();
 }
@@ -281,7 +281,7 @@ void ScriptManager::FreeModule(Obj* object) {
 		FreeFunction((Obj*)(*module->Functions)[i]);
 	}
 
-	Memory::Free(module->SourceFilename);
+	MEMORY_FREE(module->SourceFilename);
 
 	delete module->Functions;
 	delete module->Locals;
@@ -289,7 +289,7 @@ void ScriptManager::FreeModule(Obj* object) {
 void ScriptManager::FreeClass(Obj* object) {
 	ObjClass* klass = (ObjClass*)object;
 
-	Memory::Free(klass->Name);
+	MEMORY_FREE(klass->Name);
 
 	delete klass->Methods;
 	delete klass->Fields;
@@ -301,21 +301,21 @@ void ScriptManager::FreeClass(Obj* object) {
 void ScriptManager::FreeEnumeration(Obj* object) {
 	ObjEnum* enumeration = (ObjEnum*)object;
 
-	Memory::Free(enumeration->Name);
+	MEMORY_FREE(enumeration->Name);
 
 	delete enumeration->Fields;
 }
 void ScriptManager::FreeNamespace(Obj* object) {
 	ObjNamespace* ns = (ObjNamespace*)object;
 
-	Memory::Free(ns->Name);
+	MEMORY_FREE(ns->Name);
 
 	delete ns->Fields;
 }
 void ScriptManager::FreeBoundMethod(Obj* object) {
 	ObjBoundMethod* boundMethod = (ObjBoundMethod*)object;
 
-	Memory::Free(boundMethod->Arguments);
+	MEMORY_FREE(boundMethod->Arguments);
 }
 #ifdef HSL_VM
 void ScriptManager::RemoveTemporaryModules() {
@@ -428,7 +428,7 @@ void ScriptManager::DestroyObject(Obj* object) {
 	}
 #endif
 
-	Memory::Free(object);
+	MEMORY_FREE(object);
 }
 // #endregion
 
@@ -816,7 +816,7 @@ bool ScriptManager::LoadScriptFromStream(VMThread* thread, Stream* stream, const
 }
 ObjModule* ScriptManager::CompileScriptFromStream(VMThread* thread, Stream* stream, const char* filename) {
 	size_t size = stream->Length();
-	char* code = (char*)Memory::Calloc(size + 1, sizeof(char));
+	char* code = (char*)MEMORY_CALLOC(size + 1, sizeof(char));
 	if (!code) {
 		Log::Print(Log::LOG_ERROR, "Out of memory reading script \"%s\"!", filename);
 		return nullptr;
@@ -829,7 +829,7 @@ ObjModule* ScriptManager::CompileScriptFromStream(VMThread* thread, Stream* stre
 	} catch (const CompilerErrorException& error) {
 		Log::Print(Log::LOG_ERROR, "Could not compile script \"%s\"!\n%s", filename, error.what());
 	}
-	Memory::Free(code);
+	MEMORY_FREE(code);
 	return module;
 }
 ObjModule* ScriptManager::CompileAndLoad(VMThread* thread, const char* code, const char* filename, CompilerSettings settings) {
@@ -1028,7 +1028,7 @@ void ScriptManager::LoadSourceCodeLines(SourceFile* sourceFile, const char* sour
 	}
 
 	size_t size = stream->Length();
-	char* text = (char*)Memory::Calloc(size + 1, sizeof(char));
+	char* text = (char*)MEMORY_CALLOC(size + 1, sizeof(char));
 	stream->ReadBytes(text, size);
 	stream->Close();
 
@@ -1071,7 +1071,7 @@ void ScriptManager::AddSourceFile(const char* sourceFilename, char* text) {
 }
 void ScriptManager::RemoveSourceFile(const char* sourceFilename) {
 	if (SourceFiles->Exists(sourceFilename)) {
-		Memory::Free(SourceFiles->Get(sourceFilename));
+		MEMORY_FREE(SourceFiles->Get(sourceFilename));
 
 		SourceFiles->Remove(sourceFilename);
 	}
@@ -1094,7 +1094,7 @@ std::string ScriptManager::GetBytecodeFilenameForHash(Uint32 filenameHash) {
 // #endregion
 
 #define ALLOCATE_OBJ(type, objectType) (type*)AllocateObject(sizeof(type), objectType)
-#define ALLOCATE(type, size) (type*)Memory::TrackedMalloc(#type, sizeof(type) * size)
+#define ALLOCATE(type, size) (type*)MEMORY_ALLOC(sizeof(type) * size)
 
 Obj* ScriptManager::AllocateObject(size_t size, ObjType type) {
 #ifdef HSL_VM
@@ -1104,7 +1104,7 @@ Obj* ScriptManager::AllocateObject(size_t size, ObjType type) {
 	}
 #endif
 
-	Obj* object = (Obj*)Memory::TrackedCalloc("AllocateObject", 1, size);
+	Obj* object = (Obj*)MEMORY_CALLOC(1, size);
 	object->Size = size;
 	object->Type = type;
 #ifdef HSL_VM
@@ -1148,7 +1148,7 @@ ObjString* ScriptManager::TakeString(char* chars, size_t length) {
 	ObjString* string = GetInternedString(view);
 	if (string) {
 		// This string was already interned, so we have to free chars
-		Memory::Free(chars);
+		MEMORY_FREE(chars);
 		return string;
 	}
 
@@ -1237,13 +1237,11 @@ ObjFunction* ScriptManager::NewFunction() {
 }
 ObjNative* ScriptManager::NewNative(NativeFn function) {
 	ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE_FUNCTION);
-	Memory::Track(native, "NewNative");
 	native->Function = function;
 	return native;
 }
 ObjAPINative* ScriptManager::NewAPINative(APINativeFn function) {
 	ObjAPINative* native = ALLOCATE_OBJ(ObjAPINative, OBJ_API_NATIVE_FUNCTION);
-	Memory::Track(native, "NewAPINative");
 	native->Function = function;
 	return native;
 }
@@ -1271,7 +1269,6 @@ ObjClosure* ScriptManager::NewClosure(ObjFunction* function) {
 }
 ObjClass* ScriptManager::NewClass(Uint32 hash) {
 	ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
-	Memory::Track(klass, "NewClass");
 	klass->Hash = hash;
 	klass->Methods = new Table(NULL, 4);
 	klass->Fields = new Table(NULL, 16);
@@ -1287,7 +1284,7 @@ ObjClass* ScriptManager::NewClass(Uint32 hash) {
 }
 ObjClass* ScriptManager::NewClass(const char* className) {
 	ObjClass* klass = NewClass(GetClassHash(className));
-	klass->Name = (char*)Memory::Realloc(klass->Name, strlen(className) + 1);
+	klass->Name = (char*)MEMORY_REALLOC(klass->Name, strlen(className) + 1);
 	memcpy(klass->Name, className, strlen(className) + 1);
 	return klass;
 }
@@ -1298,9 +1295,8 @@ ObjInstance* ScriptManager::NewInstance(ObjClass* klass) {
 }
 ObjBoundMethod* ScriptManager::NewBoundMethod(ObjFunction* method, VMValue* args, Uint8 argCount) {
 	ObjBoundMethod* bound = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD);
-	Memory::Track(bound, "NewBoundMethod");
 	bound->Method = method;
-	bound->Arguments = (VMValue*)Memory::Malloc(argCount * sizeof(VMValue));
+	bound->Arguments = (VMValue*)MEMORY_ALLOC(argCount * sizeof(VMValue));
 	bound->ArgumentCount = argCount;
 	memcpy(bound->Arguments, args, argCount * sizeof(VMValue));
 	return bound;
@@ -1313,34 +1309,30 @@ ObjMap* ScriptManager::NewMap() {
 }
 ObjNamespace* ScriptManager::NewNamespace(Uint32 hash) {
 	ObjNamespace* ns = ALLOCATE_OBJ(ObjNamespace, OBJ_NAMESPACE);
-	Memory::Track(ns, "NewNamespace");
 	ns->Fields = new Table(NULL, 16);
 	ns->Name = StringUtils::Create(GetClassName(hash));
 	return ns;
 }
 ObjNamespace* ScriptManager::NewNamespace(const char* nsName) {
 	ObjNamespace* ns = NewNamespace(GetClassHash(nsName));
-	ns->Name = (char*)Memory::Realloc(ns->Name, strlen(nsName) + 1);
+	ns->Name = (char*)MEMORY_REALLOC(ns->Name, strlen(nsName) + 1);
 	memcpy(ns->Name, nsName, strlen(nsName) + 1);
 	return ns;
 }
 ObjEnum* ScriptManager::NewEnum(Uint32 hash) {
 	ObjEnum* enumeration = ALLOCATE_OBJ(ObjEnum, OBJ_ENUM);
-	Memory::Track(enumeration, "NewEnum");
 	enumeration->Fields = new Table(NULL, 16);
 	enumeration->Name = StringUtils::Create(GetClassName(hash));
 	return enumeration;
 }
 ObjModule* ScriptManager::NewModule() {
 	ObjModule* module = ALLOCATE_OBJ(ObjModule, OBJ_MODULE);
-	Memory::Track(module, "NewModule");
 	module->Functions = new vector<ObjFunction*>();
 	module->Locals = new vector<VMValue>();
 	return module;
 }
 Obj* ScriptManager::NewNativeInstance(size_t size) {
 	Obj* obj = ImplInstance->New(size, OBJ_NATIVE_INSTANCE);
-	Memory::Track(obj, "NewNativeInstance");
 	return obj;
 }
 
@@ -1389,14 +1381,14 @@ VMValue ScriptManager::CastValueAsString(VMValue v) {
 		return v;
 	}
 
-	char* buffer = (char*)malloc(512);
+	char* buffer = (char*)MEMORY_ALLOC(512);
 	PrintBuffer buffer_info;
 	buffer_info.Buffer = &buffer;
 	buffer_info.WriteIndex = 0;
 	buffer_info.BufferSize = 512;
 	ValuePrinter::Print(&buffer_info, v, false);
 	v = OBJECT_VAL(CopyString(buffer, buffer_info.WriteIndex));
-	free(buffer);
+	MEMORY_FREE(buffer);
 	return v;
 }
 VMValue ScriptManager::ConcatenateValues(VMValue va, VMValue vb) {
@@ -1404,7 +1396,7 @@ VMValue ScriptManager::ConcatenateValues(VMValue va, VMValue vb) {
 	ObjString* b = AS_STRING(vb);
 
 	size_t length = a->Length + b->Length;
-	char* chars = (char*)Memory::Malloc(length + 1);
+	char* chars = (char*)MEMORY_ALLOC(length + 1);
 	if (!chars) {
 		return NULL_VAL;
 	}

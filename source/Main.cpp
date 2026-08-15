@@ -112,8 +112,6 @@ void DisposeSubsystems() {
 	VMThreadDebugger::Dispose();
 #endif
 
-	Memory::ClearTrackedMemory();
-
 	Log::Close();
 }
 
@@ -324,7 +322,7 @@ bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 	}
 
 	size_t size = stream->Length();
-	char* code = (char*)Memory::Calloc(size + 1, sizeof(char));
+	char* code = (char*)MEMORY_CALLOC(size + 1, sizeof(char));
 	if (!code) {
 		Log::Print(Log::LOG_ERROR, "Out of memory reading file!");
 		stream->Close();
@@ -339,7 +337,7 @@ bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 	MemoryStream* memStream = MemoryStream::New(0x100);
 	if (!memStream) {
 		Log::Print(Log::LOG_ERROR, "Not enough memory for compiling code!");
-		Memory::Free(code);
+		MEMORY_FREE(code);
 		return false;
 	}
 
@@ -361,7 +359,7 @@ bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 	delete compiler;
 	Compiler::FinishCompiling();
 
-	Memory::Free(code);
+	MEMORY_FREE(code);
 
 	if (!didCompile) {
 		memStream->Close();

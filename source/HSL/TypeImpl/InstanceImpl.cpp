@@ -8,7 +8,6 @@ InstanceImpl::InstanceImpl(ScriptManager* manager) {
 
 Obj* InstanceImpl::New(size_t size, ObjType type) {
 	ObjInstance* instance = (ObjInstance*)Manager->AllocateObject(size, type);
-	Memory::Track(instance, "NewInstance");
 	instance->Fields = new Table(NULL, 16);
 	instance->Destructor = Dispose;
 	return (Obj*)instance;

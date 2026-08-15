@@ -26,7 +26,6 @@ Obj* StreamImpl::Constructor(VMThread* thread) {
 
 ObjStream* StreamImpl::New(void* streamPtr, bool writable) {
 	ObjStream* stream = (ObjStream*)Manager->NewNativeInstance(sizeof(ObjStream));
-	Memory::Track(stream, "NewStream");
 	stream->Object.Class = Class;
 	stream->InstanceObj.Destructor = Dispose;
 	stream->StreamPtr = (Stream*)streamPtr;

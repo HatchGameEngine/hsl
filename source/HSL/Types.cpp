@@ -69,32 +69,21 @@ void Chunk::Init() {
 	ModuleLocals = nullptr;
 }
 void Chunk::Alloc() {
-	if (!Code) {
-		Code = (Uint8*)Memory::TrackedMalloc("Chunk::Code", sizeof(Uint8) * Capacity);
-	}
-	else {
-		Code = (Uint8*)Memory::Realloc(Code, sizeof(Uint8) * Capacity);
-	}
-
-	if (!Lines) {
-		Lines = (int*)Memory::TrackedMalloc("Chunk::Lines", sizeof(int) * Capacity);
-	}
-	else {
-		Lines = (int*)Memory::Realloc(Lines, sizeof(int) * Capacity);
-	}
+	Code = (Uint8*)MEMORY_REALLOC(Code, sizeof(Uint8) * Capacity);
+	Lines = (int*)MEMORY_REALLOC(Lines, sizeof(int) * Capacity);
 
 	OwnsMemory = true;
 }
 void Chunk::Free() {
 	if (OwnsMemory) {
 		if (Code) {
-			Memory::Free(Code);
+			MEMORY_FREE(Code);
 			Code = NULL;
 			Count = 0;
 			Capacity = 0;
 		}
 		if (Lines) {
-			Memory::Free(Lines);
+			MEMORY_FREE(Lines);
 			Lines = NULL;
 		}
 	}
@@ -106,7 +95,7 @@ void Chunk::Free() {
 	}
 
 	if (Breakpoints) {
-		Memory::Free(Breakpoints);
+		MEMORY_FREE(Breakpoints);
 	}
 
 	if (Locals) {
@@ -118,8 +107,8 @@ void Chunk::Free() {
 
 #if USING_VM_FUNCPTRS
 	if (OpcodeFuncs) {
-		Memory::Free(OpcodeFuncs);
-		Memory::Free(IPToOpcode);
+		MEMORY_FREE(OpcodeFuncs);
+		MEMORY_FREE(IPToOpcode);
 		OpcodeFuncs = NULL;
 		IPToOpcode = NULL;
 		OpcodeCount = 0;
@@ -128,7 +117,7 @@ void Chunk::Free() {
 }
 void Chunk::DeleteLocals(vector<ChunkLocal>* locals) {
 	for (size_t i = 0; i < locals->size(); i++) {
-		Memory::Free((*locals)[i].Name);
+		MEMORY_FREE((*locals)[i].Name);
 	}
 	locals->clear();
 	locals->shrink_to_fit();
@@ -148,9 +137,8 @@ void Chunk::SetupOpfuncs() {
 		}
 	}
 
-	OpcodeFuncs = (OpcodeFunc*)Memory::TrackedMalloc(
-		"Chunk::OpcodeFuncs", sizeof(OpcodeFunc) * OpcodeCount);
-	IPToOpcode = (int*)Memory::TrackedMalloc("Chunk::IPToOpcode", sizeof(int) * Count);
+	OpcodeFuncs = (OpcodeFunc*)MEMORY_ALLOC(sizeof(OpcodeFunc) * OpcodeCount);
+	IPToOpcode = (int*)MEMORY_ALLOC(sizeof(int) * Count);
 	int offset = 0;
 	for (int i = 0; i < OpcodeCount; i++) {
 		Uint8 op = *(Code + offset);

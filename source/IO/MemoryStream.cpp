@@ -5,10 +5,10 @@
 #endif
 
 MemoryStream* MemoryStream::New(size_t size) {
-	void* data = Memory::Malloc(size);
+	void* data = MEMORY_ALLOC(size);
 	MemoryStream* stream = MemoryStream::New(data, size);
 	if (!stream) {
-		Memory::Free(data);
+		MEMORY_FREE(data);
 	}
 	else {
 		stream->owns_memory = true;
@@ -58,7 +58,7 @@ bool MemoryStream::MakeWritable(bool writable) {
 
 void MemoryStream::Close() {
 	if (owns_memory) {
-		Memory::Free(pointer_start);
+		MEMORY_FREE(pointer_start);
 	}
 
 	Stream::Close();
@@ -123,7 +123,7 @@ size_t MemoryStream::WriteBytes(void* data, size_t n) {
 	size_t pos = Position();
 	if (pos + n > size) {
 		size = pos + n;
-		pointer_start = (unsigned char*)Memory::Realloc(pointer_start, size);
+		pointer_start = (unsigned char*)MEMORY_REALLOC(pointer_start, size);
 		pointer = pointer_start + pos;
 	}
 	memcpy(pointer, data, n);

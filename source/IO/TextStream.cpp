@@ -12,7 +12,7 @@ TextStream* TextStream::New(Stream* other) {
 
 	size_t source_length = other->Length() + 1;
 
-	Uint8* data = (Uint8*)Memory::Calloc(source_length, sizeof(Uint8));
+	Uint8* data = (Uint8*)MEMORY_CALLOC(source_length, sizeof(Uint8));
 	if (!data) {
 		goto FREE;
 	}
@@ -42,7 +42,7 @@ TextStream* TextStream::New(const char* text) {
 
 	size_t source_length = strlen(text) + 1;
 
-	Uint8* data = (Uint8*)Memory::Calloc(source_length, sizeof(Uint8));
+	Uint8* data = (Uint8*)MEMORY_CALLOC(source_length, sizeof(Uint8));
 	if (!data) {
 		goto FREE;
 	}
@@ -78,7 +78,7 @@ bool TextStream::MakeWritable(bool writable) {
 
 void TextStream::Close() {
 	if (pointer_start != nullptr) {
-		Memory::Free(pointer_start);
+		MEMORY_FREE(pointer_start);
 		pointer_start = nullptr;
 	}
 	Stream::Close();
@@ -121,7 +121,7 @@ Uint32 TextStream::ReadCompressed(void* out, size_t outSz) {
 size_t TextStream::WriteBytes(void* data, size_t n) {
 	if (Position() + n > size) {
 		size_t pos = Position();
-		pointer_start = (unsigned char*)Memory::Realloc(pointer_start, pos + n);
+		pointer_start = (unsigned char*)MEMORY_REALLOC(pointer_start, pos + n);
 		pointer = pointer_start + pos;
 	}
 	memcpy(pointer, data, n);

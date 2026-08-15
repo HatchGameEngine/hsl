@@ -123,7 +123,6 @@ set(HSL_MAIN_SOURCES
   source/IO/TerminalInput.cpp
   source/IO/TextStream.cpp
   source/Utilities/Log.cpp
-  source/Utilities/Memory.cpp
   source/Utilities/PrintBuffer.cpp
   source/Utilities/StringUtils.cpp
 )
