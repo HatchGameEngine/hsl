@@ -1764,17 +1764,16 @@ int VMThread::RunInstruction() {
 		if (IS_ENUM(object)) {
 			enumeration = AS_ENUM(object);
 		}
-		else if (ThrowRuntimeError(false,
-				 "Unexpected value type; value was of type %s.",
-				 GetValueTypeString(object)) == ERROR_RES_CONTINUE) {
+		else {
+			ThrowRuntimeError(false,
+				 "Expected an enumeration, but value was of type %s.",
+				 GetValueTypeString(object));
 			goto FAIL_OP_ADD_ENUM;
 		}
 
 		if (Manager->Lock()) {
 			VMValue value = Pop();
 			enumeration->Fields->Put(hash, value);
-			Pop();
-			Push(value);
 			Manager->Unlock();
 			VM_BREAK;
 		}
