@@ -260,4 +260,7 @@ public:
 #endif
 };
 
+#define GET_ARG_OPT(argIndex, argFunction, argDefault) \
+	(argIndex < argCount ? thread->argFunction(args, argIndex) : argDefault)
+
 #endif /* HSL_VMTHREAD_H */
