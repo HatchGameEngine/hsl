@@ -978,6 +978,18 @@ int VMThread::RunInstruction() {
 				}
 			}
 		}
+		// Otherwise, if it's an enum,
+		else if (IS_ENUM(object)) {
+			ObjEnum* enumObj = AS_ENUM(object);
+			if (Manager->Lock()) {
+				if (enumObj->Fields->Exists(hash)) {
+					Pop();
+					Push(INTEGER_VAL(true));
+					Manager->Unlock();
+					VM_BREAK;
+				}
+			}
+		}
 		// Otherwise, if it's a namespace,
 		else if (IS_NAMESPACE(object)) {
 			ObjNamespace* ns = AS_NAMESPACE(object);
