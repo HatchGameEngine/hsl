@@ -2540,8 +2540,6 @@ void Compiler::GetDefaultStatement() {
 		Error("Cannot use default label outside of switch statement.");
 	}
 
-	ConsumeToken(TOKEN_COLON, "Expected ':' after 'default'.");
-
 	// Check if there already is a default clause, and prevent compilation if so.
 	vector<switch_case>* top = SwitchJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
@@ -2549,6 +2547,8 @@ void Compiler::GetDefaultStatement() {
 			Error("Cannot have multiple default clauses.");
 		}
 	}
+
+	ConsumeToken(TOKEN_COLON, "Expected ':' after 'default'.");
 
 	switch_case case_info;
 	case_info.IsDefault = true;
