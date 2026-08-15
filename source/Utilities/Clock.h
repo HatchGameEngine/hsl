@@ -1,5 +1,5 @@
-#ifndef DIAGNOSTICS_CLOCK_H
-#define DIAGNOSTICS_CLOCK_H
+#ifndef UTILITIES_CLOCK_H
+#define UTILITIES_CLOCK_H
 
 #include <Includes/Standard.h>
 
@@ -12,4 +12,4 @@ public:
 	static void Delay(double milliseconds);
 };
 
-#endif /* DIAGNOSTICS_CLOCK_H */
+#endif /* UTILITIES_CLOCK_H */

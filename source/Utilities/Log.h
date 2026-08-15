@@ -1,5 +1,5 @@
-#ifndef DIAGNOSTICS_LOG_H
-#define DIAGNOSTICS_LOG_H
+#ifndef UTILITIES_LOG_H
+#define UTILITIES_LOG_H
 
 #include <Includes/Standard.h>
 
@@ -42,4 +42,4 @@ public:
 	static void Write(const char* format, ...);
 };
 
-#endif /* DIAGNOSTICS_LOG_H */
+#endif /* UTILITIES_LOG_H */
