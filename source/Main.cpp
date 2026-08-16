@@ -1,5 +1,5 @@
 #include <HSL/BytecodeDebugger.h>
-#include <HSL/CompilerEnums.h>
+#include <HSL/CompilerSettings.h>
 #include <HSL/ScriptManager.h>
 #include <HSL/Version.h>
 #include <HSL/Exceptions/CompilerErrorException.h>

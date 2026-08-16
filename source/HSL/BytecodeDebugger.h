@@ -1,7 +1,7 @@
 #ifndef HSL_BYTECODEDEBUGGER_H
 #define HSL_BYTECODEDEBUGGER_H
 
-#include <HSL/CompilerEnums.h>
+#include <HSL/CompilerSettings.h>
 #include <HSL/HashMap.h>
 #include <HSL/Types.h>
 

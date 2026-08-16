@@ -5,7 +5,7 @@
 #include <HSL/VMThread.h>
 
 #ifdef HSL_VM
-#include <HSL/CompilerEnums.h>
+#include <HSL/CompilerSettings.h>
 #endif
 
 class ScriptREPL {

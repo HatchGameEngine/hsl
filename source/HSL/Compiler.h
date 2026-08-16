@@ -1,7 +1,7 @@
 #ifndef HSL_COMPILER_H
 #define HSL_COMPILER_H
 
-#include <HSL/CompilerEnums.h>
+#include <HSL/CompilerSettings.h>
 #include <HSL/Token.h>
 #include <HSL/Types.h>
 

@@ -1,7 +1,5 @@
-#ifndef COMPILER_ENUMS_H
-#define COMPILER_ENUMS_H
-
-#include <HSL/Types.h>
+#ifndef HSL_COMPILERSETTINGS_H
+#define HSL_COMPILERSETTINGS_H
 
 struct CompilerSettings {
 	bool PrintToLog;
@@ -12,4 +10,4 @@ struct CompilerSettings {
 	bool PrintChunks;
 };
 
-#endif /* COMPILER_ENUMS_H */
+#endif /* HSL_COMPILERSETTINGS_H */
