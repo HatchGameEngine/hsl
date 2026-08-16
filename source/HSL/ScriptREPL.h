@@ -1,9 +1,12 @@
 #ifndef HSL_SCRIPTREPL_H
 #define HSL_SCRIPTREPL_H
 
-#include <HSL/CompilerEnums.h>
 #include <HSL/Types.h>
 #include <HSL/VMThread.h>
+
+#ifdef HSL_VM
+#include <HSL/CompilerEnums.h>
+#endif
 
 class ScriptREPL {
 #ifdef HSL_VM

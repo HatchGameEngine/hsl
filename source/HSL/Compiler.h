@@ -2,9 +2,84 @@
 #define HSL_COMPILER_H
 
 #include <HSL/CompilerEnums.h>
+#include <HSL/Token.h>
 #include <HSL/Types.h>
 
 #include <vector>
+
+struct Parser {
+	Token Current;
+	Token Previous;
+	bool HadError;
+	bool PanicMode;
+};
+
+struct Scanner {
+	int Line;
+	char* Start;
+	char* Current;
+	char* LinePos;
+	char* SourceFilename;
+	char* SourceStart;
+};
+
+enum Precedence {
+	PREC_NONE,
+	PREC_ASSIGNMENT, // =
+	PREC_TERNARY,
+	PREC_OR, // or (logical)
+	PREC_AND, // and (logical)
+	PREC_BITWISE_OR,
+	PREC_BITWISE_XOR,
+	PREC_BITWISE_AND,
+	PREC_EQUALITY, // == !=
+	PREC_COMPARISON, // < > <= >=
+	PREC_BITWISE_SHIFT, // << >>
+	PREC_TERM, // + -
+	PREC_FACTOR, // * / %
+	PREC_UNARY, // ! - ~ ++x --x
+	PREC_CALL, // . () [] x++ x--
+	PREC_PRIMARY
+};
+
+enum ExprContext {
+	EXPRCONTEXT_VALUE,
+	EXPRCONTEXT_LOCATION
+};
+
+class Compiler;
+typedef ExprContext (Compiler::*ParseFn)(ExprContext context);
+
+enum VariableType {
+	VARTYPE_UNKNOWN,
+	VARTYPE_LOCAL,
+	VARTYPE_MODULE_LOCAL,
+	VARTYPE_GLOBAL
+};
+
+struct Local {
+	Token Name;
+	VariableType Type = VARTYPE_UNKNOWN;
+	int Index = -1;
+	int Depth = -1;
+	bool Resolved = false;
+	bool WasSet = false;
+	bool Constant = false;
+	VMValue ConstantVal = VMValue{VAL_ERROR};
+};
+
+struct ParseRule {
+	ParseFn Prefix;
+	ParseFn Infix;
+	enum Precedence Precedence;
+};
+
+enum FunctionType {
+	FUNCTIONTYPE_TOPLEVEL,
+	FUNCTIONTYPE_FUNCTION,
+	FUNCTIONTYPE_CONSTRUCTOR,
+	FUNCTIONTYPE_METHOD
+};
 
 class ScriptManager;
 

@@ -1,7 +1,7 @@
 #ifndef HSL_BYTECODE_H
 #define HSL_BYTECODE_H
 
-#include <HSL/CompilerEnums.h>
+#include <HSL/Token.h>
 #include <HSL/Types.h>
 #include <IO/Stream.h>
 
