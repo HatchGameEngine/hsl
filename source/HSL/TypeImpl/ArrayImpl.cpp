@@ -32,7 +32,10 @@ ArrayImpl::ArrayImpl(ScriptManager* manager) {
 #endif
 
 	TypeImpl::RegisterClass(manager, Class);
+
+#ifdef HSL_STDLIB
 	TypeImpl::ExposeClass(manager, Class);
+#endif
 }
 
 Obj* ArrayImpl::Allocate() {

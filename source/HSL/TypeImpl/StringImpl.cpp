@@ -47,7 +47,10 @@ StringImpl::StringImpl(ScriptManager* manager) {
 #endif
 
 	TypeImpl::RegisterClass(manager, Class);
+
+#ifdef HSL_STDLIB
 	TypeImpl::ExposeClass(manager, Class);
+#endif
 }
 
 Obj* StringImpl::Constructor(VMThread* thread) {

@@ -14,7 +14,10 @@ FunctionImpl::FunctionImpl(ScriptManager* manager) {
 #endif
 
 	TypeImpl::RegisterClass(manager, Class);
+
+#ifdef HSL_STDLIB
 	TypeImpl::ExposeClass(manager, Class);
+#endif
 }
 
 Obj* FunctionImpl::Constructor(VMThread* thread) {
