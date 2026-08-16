@@ -14,7 +14,6 @@
 extern "C" {
 #include <Platforms/MacOS/Filesystem.h>
 }
-#include <Filesystem/Directory.h>
 #include <unistd.h>
 #endif
 

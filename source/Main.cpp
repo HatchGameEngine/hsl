@@ -1,12 +1,12 @@
 #include <HSL/BytecodeDebugger.h>
 #include <HSL/CompilerEnums.h>
 #include <HSL/ScriptManager.h>
-#include <Utilities/Log.h>
 #include <Exceptions/CompilerErrorException.h>
 #include <Exceptions/ScriptREPLException.h>
-#include <Filesystem/File.h>
 #include <Includes/Standard.h>
 #include <Includes/Version.h>
+#include <IO/FileStream.h>
+#include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>
 
 #include <Main.h>
@@ -217,7 +217,7 @@ void PrintVersionText() {
 
 #ifdef HSL_STANDALONE_RUNNER
 bool RunnerMain(const char* filename) {
-	Stream* stream = File::Open(filename, File::READ_ACCESS);
+	Stream* stream = FileStream::New(filename, "rb");
 	if (!stream) {
 		Log::Print(Log::LOG_ERROR, "Could not open file \"%s\"!", filename);
 		return false;
@@ -315,7 +315,7 @@ bool RunnerMain(const char* filename) {
 
 #ifdef HSL_COMPILER
 bool CompilerMain(const char* inputFilename, const char* outputFilename) {
-	Stream* stream = File::Open(inputFilename, File::READ_ACCESS);
+	Stream* stream = FileStream::New(inputFilename, "rb");
 	if (!stream) {
 		Log::Print(Log::LOG_ERROR, "Could not open file \"%s\"!", inputFilename);
 		return false;
@@ -373,7 +373,7 @@ bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 		outputFilename = filenameBuffer;
 	}
 
-	Stream* output = File::Open(outputFilename, File::WRITE_ACCESS);
+	Stream* output = FileStream::New(outputFilename, "wb");
 	if (!output) {
 		Log::Print(Log::LOG_ERROR, "Could not open file \"%s\"!", outputFilename);
 		memStream->Close();

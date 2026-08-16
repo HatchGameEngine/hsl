@@ -113,16 +113,13 @@ set(HSL_MAIN_SOURCES
   source/HSL/Value.cpp
   source/HSL/ValuePrinter.cpp
   source/Error.cpp
-  source/Filesystem/Directory.cpp
-  source/Filesystem/File.cpp
-  source/Filesystem/Path.cpp
   source/Hashing/CombinedHash.cpp
   source/Hashing/CRC32.cpp
   source/Hashing/FNV1A.cpp
   source/Hashing/MD5.cpp
   source/Hashing/Murmur.cpp
+  source/IO/FileStream.cpp
   source/IO/MemoryStream.cpp
-  source/IO/StandardIOStream.cpp
   source/IO/Stream.cpp
   source/IO/TerminalInput.cpp
   source/IO/TextStream.cpp

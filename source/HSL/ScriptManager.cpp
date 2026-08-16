@@ -4,7 +4,7 @@
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
 #include <Utilities/Log.h>
-#include <Filesystem/File.h>
+#include <IO/FileStream.h>
 #include <Hashing/CombinedHash.h>
 #include <Utilities/StringUtils.h>
 
@@ -788,7 +788,7 @@ bool ScriptManager::LoadScript(VMThread* thread, const char* filename) {
 	fullPath += std::string(filename);
 	filename = fullPath.c_str();
 
-	Stream* stream = File::Open(filename, File::READ_ACCESS);
+	Stream* stream = FileStream::New(filename, "rb");
 	if (!stream) {
 		Log::Print(Log::LOG_ERROR, "Could not open file \"%s\"!", filename);
 		return false;
@@ -1022,7 +1022,7 @@ void ScriptManager::LoadSourceCodeLines(SourceFile* sourceFile, char* text) {
 	sourceFile->Exists = true;
 }
 void ScriptManager::LoadSourceCodeLines(SourceFile* sourceFile, const char* sourceFilename) {
-	Stream* stream = File::Open(sourceFilename, File::READ_ACCESS);
+	Stream* stream = FileStream::New(sourceFilename, "rb");
 	if (!stream) {
 		return;
 	}
@@ -1040,9 +1040,7 @@ char* ScriptManager::GetSourceCodeLine(const char* sourceFilename, int line) {
 	if (!SourceFiles->Exists(sourceFilename)) {
 		sourceFile = new SourceFile;
 
-		if (File::Exists(sourceFilename)) {
-			LoadSourceCodeLines(sourceFile, sourceFilename);
-		}
+		LoadSourceCodeLines(sourceFile, sourceFilename);
 
 		if (!sourceFile->Exists) {
 			Log::Print(Log::LOG_WARN, "Source file \"%s\" does not exist.", sourceFilename);

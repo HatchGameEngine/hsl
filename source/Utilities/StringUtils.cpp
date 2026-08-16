@@ -1,5 +1,4 @@
 #include <Utilities/Memory.h>
-#include <Filesystem/Path.h>
 #include <Utilities/StringUtils.h>
 
 char* StringUtils::Create(void* src, size_t length) {
