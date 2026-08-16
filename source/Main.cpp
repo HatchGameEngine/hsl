@@ -48,6 +48,8 @@
 #include <cstdio>
 
 #ifndef HSL_LIBRARY
+#include <stdexcept>
+
 ScriptManager* GlobalScriptManager = nullptr;
 #endif
 

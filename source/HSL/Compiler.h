@@ -4,6 +4,8 @@
 #include <HSL/CompilerEnums.h>
 #include <HSL/Types.h>
 
+#include <vector>
+
 class ScriptManager;
 
 class Compiler {
@@ -15,9 +17,9 @@ public:
 	static Parser parser;
 	static Scanner scanner;
 	static ParseRule* Rules;
-	static vector<ObjFunction*> Functions;
-	static vector<Local> ModuleLocals;
-	static vector<Local> ModuleConstants;
+	static std::vector<ObjFunction*> Functions;
+	static std::vector<Local> ModuleLocals;
+	static std::vector<Local> ModuleConstants;
 	static HashMap<VMValue>* StandardConstants;
 	static HashMap<Token>* TokenMap;
 	static bool DoLogging;
@@ -28,17 +30,17 @@ public:
 	int Type = FUNCTIONTYPE_TOPLEVEL;
 	bool InREPL = false;
 	bool EmitNullOnReturn = true;
-	string ClassName;
+	std::string ClassName;
 	Local Locals[0x100];
-	vector<Local> AllLocals;
-	vector<Local> Constants;
-	vector<Uint32> Breakpoints;
+	std::vector<Local> AllLocals;
+	std::vector<Local> Constants;
+	std::vector<Uint32> Breakpoints;
 	int LocalCount = -1;
 	int ScopeDepth = 0;
-	vector<Uint32> ClassHashList;
-	vector<Uint32> ClassExtendedList;
-	vector<Local>* UnusedVariables = nullptr;
-	vector<Local>* UnsetVariables = nullptr;
+	std::vector<Uint32> ClassHashList;
+	std::vector<Uint32> ClassExtendedList;
+	std::vector<Local>* UnusedVariables = nullptr;
+	std::vector<Local>* UnsetVariables = nullptr;
 
 	Token MakeToken(int type);
 	Token MakeTokenRaw(int type, const char* message);
@@ -165,7 +167,7 @@ public:
 	void GetIfStatement();
 	void GetStatement();
 	void CompileFunction();
-	int GetFunction(int type, string className);
+	int GetFunction(int type, std::string className);
 	int GetFunction(int type);
 	void GetMethod(Token className);
 	void GetVariableDeclaration(bool constant);

@@ -3,6 +3,8 @@
 
 #include <Includes/Standard.h>
 
+#include <cstdio>
+
 typedef void (*LogCallback)(int level, const char* text);
 
 class Log {

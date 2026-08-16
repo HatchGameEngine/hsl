@@ -10,7 +10,7 @@
 bool Win32_PerformanceFrequencyEnabled = false;
 double Win32_CPUFreq;
 Sint64 Win32_GameStartTime;
-stack<double> Win32_ClockStack;
+std::stack<double> Win32_ClockStack;
 #endif
 
 #include <chrono>
@@ -19,7 +19,7 @@ stack<double> Win32_ClockStack;
 #include <thread>
 
 std::chrono::steady_clock::time_point GameStartTime;
-stack<std::chrono::steady_clock::time_point> ClockStack;
+std::stack<std::chrono::steady_clock::time_point> ClockStack;
 
 void Clock::Init() {
 #ifdef USE_WIN32_CLOCK

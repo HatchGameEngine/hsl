@@ -19,6 +19,8 @@
 #include <Main.h>
 
 #ifdef HSL_VM
+#include <algorithm>
+
 bool ScriptManager::LoadAllClasses = false;
 
 // #define DEBUG_STRESS_GC
@@ -422,7 +424,6 @@ void ScriptManager::DestroyObject(Obj* object) {
 
 #ifdef HSL_VM
 	if (GC) {
-		assert(GC->GarbageSize >= object->Size);
 		GC->GarbageSize -= object->Size;
 	}
 #endif
@@ -1296,8 +1297,8 @@ ObjEnum* ScriptManager::NewEnum(Uint32 hash) {
 }
 ObjModule* ScriptManager::NewModule() {
 	ObjModule* module = ALLOCATE_OBJ(ObjModule, OBJ_MODULE);
-	module->Functions = new vector<ObjFunction*>();
-	module->Locals = new vector<VMValue>();
+	module->Functions = new std::vector<ObjFunction*>();
+	module->Locals = new std::vector<VMValue>();
 	return module;
 }
 Obj* ScriptManager::NewNativeInstance(size_t size) {

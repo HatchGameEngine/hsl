@@ -1,6 +1,9 @@
-#include <Utilities/Log.h>
 #include <Utilities/Memory.h>
 #include <Utilities/PrintBuffer.h>
+
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 
 int buffer_printf(PrintBuffer* printBuffer, const char* format, ...) {
 	va_list args;
@@ -27,9 +30,6 @@ int buffer_printf(PrintBuffer* printBuffer, const char* format, ...) {
 		*printBuffer->Buffer =
 			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
-			Log::Print(Log::LOG_ERROR,
-				"Could not reallocate print buffer of size %d!",
-				printBuffer->BufferSize);
 			va_end(argsCopy);
 			va_end(args);
 			return -1;
@@ -61,9 +61,6 @@ int buffer_write(PrintBuffer* printBuffer, const char* string) {
 		*printBuffer->Buffer =
 			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
-			Log::Print(Log::LOG_ERROR,
-				"Could not reallocate print buffer of size %d!",
-				printBuffer->BufferSize);
 			return -1;
 		}
 	}
@@ -88,9 +85,6 @@ int buffer_write(PrintBuffer* printBuffer, char chr) {
 		*printBuffer->Buffer =
 			(char*)MEMORY_REALLOC(*printBuffer->Buffer, printBuffer->BufferSize);
 		if (!*printBuffer->Buffer) {
-			Log::Print(Log::LOG_ERROR,
-				"Could not reallocate print buffer of size %d!",
-				printBuffer->BufferSize);
 			return -1;
 		}
 	}

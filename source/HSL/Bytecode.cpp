@@ -7,7 +7,7 @@
 #define BYTECODE_VERSION 0x0006
 
 Uint32 Bytecode::LatestVersion = BYTECODE_VERSION;
-vector<const char*> Bytecode::FunctionNames{"<anonymous-fn>", "main"};
+std::vector<const char*> Bytecode::FunctionNames{"<anonymous-fn>", "main"};
 
 const char* Bytecode::OpcodeNames[OP_LAST] = {"OP_NOP",
 	"OP_CONSTANT",
@@ -273,13 +273,13 @@ ObjFunction* Bytecode::ReadChunk(Stream* stream, ScriptManager* manager, std::ve
 	if (Flags & BYTECODE_FLAG_VARNAMES) {
 		Uint16 numLocals = stream->ReadUInt16();
 		if (numLocals) {
-			chunk->Locals = new vector<ChunkLocal>;
+			chunk->Locals = new std::vector<ChunkLocal>;
 			ReadLocals(stream, chunk->Locals, numLocals);
 		}
 
 		Uint16 numModuleLocals = stream->ReadUInt16();
 		if (numModuleLocals) {
-			chunk->ModuleLocals = new vector<ChunkLocal>;
+			chunk->ModuleLocals = new std::vector<ChunkLocal>;
 			ReadLocals(stream, chunk->ModuleLocals, numModuleLocals);
 		}
 	}
@@ -296,7 +296,7 @@ ObjFunction* Bytecode::ReadChunk(Stream* stream, ScriptManager* manager, std::ve
 
 	return function;
 }
-void Bytecode::ReadLocals(Stream* stream, vector<ChunkLocal>* locals, int numLocals) {
+void Bytecode::ReadLocals(Stream* stream, std::vector<ChunkLocal>* locals, int numLocals) {
 	for (int i = 0; i < numLocals; i++) {
 		char* name = stream->ReadString();
 		Uint8 flags = stream->ReadByte();
@@ -436,7 +436,7 @@ void Bytecode::WriteChunk(Stream* stream, ObjFunction* function) {
 		}
 	}
 }
-void Bytecode::WriteLocals(Stream* stream, vector<ChunkLocal>* locals, int numLocals) {
+void Bytecode::WriteLocals(Stream* stream, std::vector<ChunkLocal>* locals, int numLocals) {
 	if (!locals) {
 		stream->WriteUInt16(0);
 		return;

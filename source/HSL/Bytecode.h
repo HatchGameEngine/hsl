@@ -27,10 +27,10 @@ private:
 public:
 	static const char* Magic;
 	static Uint32 LatestVersion;
-	static vector<const char*> FunctionNames;
+	static std::vector<const char*> FunctionNames;
 	static const char* OpcodeNames[OP_LAST];
 
-	vector<ObjFunction*> Functions;
+	std::vector<ObjFunction*> Functions;
 	Uint8 Version;
 	Uint8 Flags;
 	bool HasDebugInfo = false;
@@ -41,10 +41,10 @@ public:
 	bool Read(BytecodeContainer bytecode, ScriptManager* manager, HashMap<char*>* tokens);
 	bool Read(Stream* stream, ScriptManager* manager, HashMap<char*>* tokens);
 	ObjFunction* ReadChunk(Stream* stream, ScriptManager* manager, std::vector<Uint32>* functionHashes);
-	void ReadLocals(Stream* stream, vector<ChunkLocal>* locals, int numLocals);
+	void ReadLocals(Stream* stream, std::vector<ChunkLocal>* locals, int numLocals);
 	void Write(Stream* stream, HashMap<Token>* tokenMap);
 	void WriteChunk(Stream* stream, ObjFunction* function);
-	void WriteLocals(Stream* stream, vector<ChunkLocal>* locals, int numLocals);
+	void WriteLocals(Stream* stream, std::vector<ChunkLocal>* locals, int numLocals);
 
 	static int GetTotalOpcodeSize(uint8_t* op);
 };

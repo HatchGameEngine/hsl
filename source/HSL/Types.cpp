@@ -4,6 +4,10 @@
 #include <HSL/VMThread.h>
 #include <Utilities/Memory.h>
 
+#if USING_VM_FUNCPTRS
+#include <cassert>
+#endif
+
 #define GROW_CAPACITY(val) ((val) < 8 ? 8 : val << 1)
 
 Uint32 GetClassHash(const char* name) {
@@ -64,7 +68,7 @@ void Chunk::Init() {
 	OpcodeFuncs = NULL;
 	IPToOpcode = NULL;
 #endif
-	Constants = new vector<VMValue>();
+	Constants = new std::vector<VMValue>();
 	Locals = nullptr;
 	ModuleLocals = nullptr;
 }
@@ -115,7 +119,7 @@ void Chunk::Free() {
 	}
 #endif
 }
-void Chunk::DeleteLocals(vector<ChunkLocal>* locals) {
+void Chunk::DeleteLocals(std::vector<ChunkLocal>* locals) {
 	for (size_t i = 0; i < locals->size(); i++) {
 		MEMORY_FREE((*locals)[i].Name);
 	}

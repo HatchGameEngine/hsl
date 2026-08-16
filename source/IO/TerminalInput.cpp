@@ -1,5 +1,7 @@
 #include <IO/TerminalInput.h>
 
+#include <algorithm>
+
 #ifdef USING_LINENOISE
 #include "../third_party/linenoise-ng/linenoise.h"
 #endif

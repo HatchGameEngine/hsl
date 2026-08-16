@@ -2,6 +2,8 @@
 #define ORDEREDHASHMAP_H
 
 #include <Includes/HashMap.h>
+
+#include <algorithm>
 #include <functional>
 
 template<typename T>

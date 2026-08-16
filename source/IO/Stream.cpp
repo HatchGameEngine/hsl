@@ -1,9 +1,11 @@
-#include <Utilities/Log.h>
+#include <Includes/Endian.h>
 #include <IO/Stream.h>
 
 #ifdef USE_ZLIB
 #include <IO/Compression/ZLibStream.h>
 #endif
+
+#include <cstring>
 
 #define READ_TYPE_MACRO(type) \
 	type data = {}; \
@@ -26,12 +28,6 @@ size_t Stream::ReadBytes(void* data, size_t n) {
 	if (n == 0) {
 		return 0;
 	}
-
-#if DEBUG
-	if (Position() + n > Length()) {
-		Log::Print(Log::LOG_ERROR, "Attempted to read past stream.");
-	}
-#endif
 
 	return 0;
 }

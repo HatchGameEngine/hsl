@@ -1,4 +1,7 @@
 #include <Hashing/MD5.h>
+#include <Includes/Endian.h>
+
+#include <cstring>
 
 #define F(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
 #define G(x, y, z) ((y) ^ ((z) & ((x) ^ (y))))
@@ -124,13 +127,6 @@ void* MD5::Body(Uint32* pa, Uint32* pb, Uint32* pc, Uint32* pd, void* data, unsi
 	*pd = d;
 
 	return ptr;
-}
-
-Uint8* MD5::EncryptString(Uint8* dest, char* message) {
-	return MD5::EncryptData(dest, message, strlen(message));
-}
-Uint8* MD5::EncryptString(Uint8* dest, const char* message) {
-	return MD5::EncryptString(dest, (char*)message);
 }
 
 Uint8* MD5::EncryptData(Uint8* dest, void* data, size_t size) {

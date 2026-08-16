@@ -1,4 +1,7 @@
 #include <Hashing/Murmur.h>
+#include <Includes/Endian.h>
+
+#include <cstring>
 
 Uint32 Murmur::EncryptString(char* message) {
 	return Murmur::EncryptData(message, strlen(message), 0xDEADBEEF);

@@ -1,6 +1,8 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
+#include <string>
+
 struct Token {
 	int Type;
 	char* Start;

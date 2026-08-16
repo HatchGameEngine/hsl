@@ -16,6 +16,12 @@ class VMThread;
 
 #define DEFAULT_BRANCH_LIMIT 100000
 
+#define HITBOX_LEFT 0
+#define HITBOX_TOP 1
+#define HITBOX_RIGHT 2
+#define HITBOX_BOTTOM 3
+#define NUM_HITBOX_SIDES 4
+
 enum {
 	INVOKE_OK,
 	INVOKE_FAIL,
@@ -103,9 +109,9 @@ struct Chunk {
 	Uint32* Breakpoints;
 	Uint16 BreakpointCount;
 	int* Lines;
-	vector<VMValue>* Constants;
-	vector<ChunkLocal>* Locals;
-	vector<ChunkLocal>* ModuleLocals;
+	std::vector<VMValue>* Constants;
+	std::vector<ChunkLocal>* Locals;
+	std::vector<ChunkLocal>* ModuleLocals;
 	bool OwnsMemory;
 
 	int OpcodeCount;
@@ -117,7 +123,7 @@ struct Chunk {
 	void Init();
 	void Alloc();
 	void Free();
-	void DeleteLocals(vector<ChunkLocal>* locals);
+	void DeleteLocals(std::vector<ChunkLocal>* locals);
 #if USING_VM_FUNCPTRS
 	void SetupOpfuncs();
 #endif

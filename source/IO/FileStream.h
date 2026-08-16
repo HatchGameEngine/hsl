@@ -4,6 +4,8 @@
 #include <IO/Stream.h>
 #include <Includes/Standard.h>
 
+#include <cstdio>
+
 class FileStream : public Stream {
 private:
 	FILE* FilePtr;

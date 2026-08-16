@@ -4,6 +4,9 @@
 #include <Includes/Standard.h>
 #include <Includes/Token.h>
 
+#include <string>
+#include <vector>
+
 class StringUtils {
 public:
 	static char* Create(void* src, size_t length);

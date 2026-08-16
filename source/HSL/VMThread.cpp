@@ -3,11 +3,15 @@
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
 #include <HSL/VMThread.h>
+#include <Includes/Endian.h>
 #include <Utilities/Log.h>
 #include <Utilities/Clock.h>
 #include <Utilities/StringUtils.h>
 
 #include <Main.h>
+
+#include <cstdarg>
+#include <cmath>
 
 #ifdef HSL_LIBRARY
 #include <HSL/API.h>
@@ -1463,7 +1467,7 @@ int VMThread::RunInstruction() {
 			}
 
 			// Add iterator
-			*frame->WithIteratorStackTop = NEW_STRUCT_MACRO(WithIter){
+			*frame->WithIteratorStackTop = (WithIter){
 				NULL, NULL, startIndex, NULL, receiverSlot};
 			frame->WithIteratorStackTop++;
 
@@ -3440,7 +3444,7 @@ VMValue VMThread::Values_Modulo() {
 			ThrowRuntimeError("Cannot perform modulo by zero.");
 			return DECIMAL_VAL(0.f);
 		}
-		return DECIMAL_VAL(fmod(a_d, b_d));
+		return DECIMAL_VAL(fmodf(a_d, b_d));
 	}
 	int a_d = AS_INTEGER(a);
 	int b_d = AS_INTEGER(b);

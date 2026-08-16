@@ -1,7 +1,7 @@
 #ifndef UTILITIES_MEMORY_H
 #define UTILITIES_MEMORY_H
 
-#include <string.h>
+#include <cstdlib>
 
 #define MEMORY_ALLOC(size) malloc((size))
 #define MEMORY_CALLOC(num, size) calloc((num), (size))

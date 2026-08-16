@@ -1,8 +1,3 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include <HSL/Bytecode.h>
 #include <HSL/BytecodeDebugger.h>
 #include <HSL/Compiler.h>
@@ -13,12 +8,16 @@
 #include <Exceptions/CompilerErrorException.h>
 #include <Utilities/StringUtils.h>
 
+#include <cmath>
+#include <cstdarg>
+#include <stack>
+
 Parser Compiler::parser;
 Scanner Compiler::scanner;
 ParseRule* Compiler::Rules = NULL;
-vector<ObjFunction*> Compiler::Functions;
-vector<Local> Compiler::ModuleLocals;
-vector<Local> Compiler::ModuleConstants;
+std::vector<ObjFunction*> Compiler::Functions;
+std::vector<Local> Compiler::ModuleLocals;
+std::vector<Local> Compiler::ModuleConstants;
 HashMap<VMValue>* Compiler::StandardConstants = NULL;
 HashMap<Token>* Compiler::TokenMap = NULL;
 
@@ -2187,13 +2186,13 @@ struct switch_case {
 	Uint8* CodeBlock;
 	int* LineBlock;
 };
-stack<vector<int>*> BreakJumpListStack;
-stack<vector<int>*> ContinueJumpListStack;
-stack<vector<switch_case>*> SwitchJumpListStack;
-stack<vector<Uint32>*> BreakpointListStack;
-stack<int> BreakScopeStack;
-stack<int> ContinueScopeStack;
-stack<int> SwitchScopeStack;
+std::stack<std::vector<int>*> BreakJumpListStack;
+std::stack<std::vector<int>*> ContinueJumpListStack;
+std::stack<std::vector<switch_case>*> SwitchJumpListStack;
+std::stack<std::vector<Uint32>*> BreakpointListStack;
+std::stack<int> BreakScopeStack;
+std::stack<int> ContinueScopeStack;
+std::stack<int> SwitchScopeStack;
 void Compiler::GetPrintStatement() {
 	GetExpression();
 	ConsumeToken(TOKEN_SEMICOLON, "Expected ';' after value.");
@@ -2409,7 +2408,7 @@ void Compiler::GetSwitchStatement() {
 
 	int exitJump = -1;
 
-	vector<switch_case> cases = *SwitchJumpListStack.top();
+	std::vector<switch_case> cases = *SwitchJumpListStack.top();
 	for (size_t i = 0; i < cases.size(); i++) {
 		switch_case& case_info = cases[i];
 
@@ -2475,7 +2474,7 @@ void Compiler::GetSwitchStatement() {
 	EndSwitchJumpList();
 
 	// Set the old break opcode positions to the newly placed ones
-	vector<int>* top = BreakJumpListStack.top();
+	std::vector<int>* top = BreakJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		(*top)[i] += code_offset;
 	}
@@ -2542,7 +2541,7 @@ void Compiler::GetDefaultStatement() {
 	}
 
 	// Check if there already is a default clause, and prevent compilation if so.
-	vector<switch_case>* top = SwitchJumpListStack.top();
+	std::vector<switch_case>* top = SwitchJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		if ((*top)[i].IsDefault) {
 			Error("Cannot have multiple default clauses.");
@@ -3045,7 +3044,7 @@ void Compiler::CompileFunction() {
 	ConsumeToken(TOKEN_LEFT_BRACE, "Expected '{' before function body.");
 	GetBlockStatement();
 }
-int Compiler::GetFunction(int type, string className) {
+int Compiler::GetFunction(int type, std::string className) {
 	int index = (int)Compiler::Functions.size();
 
 	char* name = StringUtils::Create(parser.Previous.Start, parser.Previous.Length);
@@ -3176,7 +3175,7 @@ void Compiler::GetModuleVariableDeclaration() {
 	}
 	else if (parser.Current.Type == TOKEN_VAR || parser.Current.Type == TOKEN_CONST) {
 		bool constant = parser.Current.Type == TOKEN_CONST;
-		vector<Local>* vec = constant ? &ModuleConstants : &ModuleLocals;
+		std::vector<Local>* vec = constant ? &ModuleConstants : &ModuleLocals;
 		AdvanceToken();
 
 		Token token = parser.Current;
@@ -3806,11 +3805,11 @@ void Compiler::EmitReturn() {
 
 // Advanced Jumping
 void Compiler::StartBreakJumpList() {
-	BreakJumpListStack.push(new vector<int>());
+	BreakJumpListStack.push(new std::vector<int>());
 	BreakScopeStack.push(ScopeDepth);
 }
 void Compiler::EndBreakJumpList() {
-	vector<int>* top = BreakJumpListStack.top();
+	std::vector<int>* top = BreakJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		int offset = (*top)[i];
 		PatchJump(offset);
@@ -3820,11 +3819,11 @@ void Compiler::EndBreakJumpList() {
 	BreakScopeStack.pop();
 }
 void Compiler::StartContinueJumpList() {
-	ContinueJumpListStack.push(new vector<int>());
+	ContinueJumpListStack.push(new std::vector<int>());
 	ContinueScopeStack.push(ScopeDepth);
 }
 void Compiler::EndContinueJumpList() {
-	vector<int>* top = ContinueJumpListStack.top();
+	std::vector<int>* top = ContinueJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		int offset = (*top)[i];
 		PatchJump(offset);
@@ -3834,11 +3833,11 @@ void Compiler::EndContinueJumpList() {
 	ContinueScopeStack.pop();
 }
 void Compiler::StartSwitchJumpList() {
-	SwitchJumpListStack.push(new vector<switch_case>());
+	SwitchJumpListStack.push(new std::vector<switch_case>());
 	SwitchScopeStack.push(ScopeDepth + 1);
 }
 void Compiler::EndSwitchJumpList() {
-	vector<switch_case>* top = SwitchJumpListStack.top();
+	std::vector<switch_case>* top = SwitchJumpListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		if (!(*top)[i].IsDefault) {
 			MEMORY_FREE((*top)[i].CodeBlock);
@@ -3850,10 +3849,10 @@ void Compiler::EndSwitchJumpList() {
 	SwitchScopeStack.pop();
 }
 void Compiler::StartBreakpointList() {
-	BreakpointListStack.push(new vector<Uint32>());
+	BreakpointListStack.push(new std::vector<Uint32>());
 }
 void Compiler::EndBreakpointList(Uint32 offset) {
-	vector<Uint32>* top = BreakpointListStack.top();
+	std::vector<Uint32>* top = BreakpointListStack.top();
 	for (size_t i = 0; i < top->size(); i++) {
 		Breakpoints.push_back((*top)[i] + offset);
 	}
@@ -4143,7 +4142,7 @@ int Compiler::CheckInfixOptimize(int preCount, int preConstant, ParseFn fn) {
 					WarningAt(&parser.Previous, "Modulo by zero will raise a runtime error!");
 					return preConstant;
 				}
-				out = DECIMAL_VAL(fmod(a_d, b_d));
+				out = DECIMAL_VAL(fmodf(a_d, b_d));
 			}
 			else {
 				int a_d = AS_INTEGER(a);
@@ -4406,8 +4405,8 @@ void Compiler::Initialize(char* name) {
 	Function = Manager->NewFunction();
 	Function->Name = name;
 
-	UnusedVariables = new vector<Local>();
-	UnsetVariables = new vector<Local>();
+	UnusedVariables = new std::vector<Local>();
+	UnsetVariables = new std::vector<Local>();
 
 	StartBreakpointList();
 
@@ -4486,7 +4485,7 @@ bool Compiler::Compile(const char* filename, const char* source, Stream* output)
 	}
 
 	if (Compiler::ModuleLocals.size() > 0) {
-		Function->Chunk.ModuleLocals = new vector<ChunkLocal>;
+		Function->Chunk.ModuleLocals = new std::vector<ChunkLocal>;
 
 		for (size_t i = 0; i < Compiler::ModuleLocals.size(); i++) {
 			Local moduleLocal = Compiler::ModuleLocals[i];
@@ -4514,7 +4513,7 @@ bool Compiler::Compile(const char* filename, const char* source, Stream* output)
 
 	if (Compiler::ModuleConstants.size() > 0) {
 		if (!Function->Chunk.ModuleLocals) {
-			Function->Chunk.ModuleLocals = new vector<ChunkLocal>;
+			Function->Chunk.ModuleLocals = new std::vector<ChunkLocal>;
 		}
 
 		for (size_t i = 0; i < Compiler::ModuleConstants.size(); i++) {
@@ -4629,7 +4628,7 @@ void Compiler::Finish() {
 	// NOTE: Top level functions don't have locals.
 	// See Compiler::Compile for the logic that handles module locals
 	if (AllLocals.size()) {
-		chunk->Locals = new vector<ChunkLocal>;
+		chunk->Locals = new std::vector<ChunkLocal>;
 
 		for (int i = 0; i < AllLocals.size(); i++) {
 			Local srcLocal = AllLocals[i];

@@ -67,13 +67,13 @@ public:
 	VMThread Threads[MAX_VM_THREADS];
 	Uint32 ThreadCount = 0;
 	GarbageCollector* GC = nullptr;
-	vector<ObjModule*> ModuleList;
-	vector<ObjModule*> TempModuleList;
+	std::vector<ObjModule*> ModuleList;
+	std::vector<ObjModule*> TempModuleList;
 	HashMap<BytecodeContainer>* Sources = nullptr;
 	HashMap<ObjClass*>* Classes = nullptr;
 	HashMap<ObjModule*>* Modules = nullptr;
 	HashMap<char*>* Tokens = nullptr;
-	vector<ObjNamespace*> AllNamespaces;
+	std::vector<ObjNamespace*> AllNamespaces;
 #endif
 
 #ifdef USE_SDL

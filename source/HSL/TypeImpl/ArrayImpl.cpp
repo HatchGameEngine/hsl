@@ -38,7 +38,7 @@ ArrayImpl::ArrayImpl(ScriptManager* manager) {
 Obj* ArrayImpl::Allocate() {
 	ObjArray* array = (ObjArray*)Manager->AllocateObject(sizeof(ObjArray), OBJ_ARRAY);
 	array->Object.Class = Class;
-	array->Values = new vector<VMValue>();
+	array->Values = new std::vector<VMValue>();
 	return (Obj*)array;
 }
 

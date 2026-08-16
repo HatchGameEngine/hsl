@@ -4,6 +4,9 @@
 #include <IO/Compression/ZLibStream.h>
 #endif
 
+#include <new>
+#include <cstring>
+
 MemoryStream* MemoryStream::New(size_t size) {
 	void* data = MEMORY_ALLOC(size);
 	MemoryStream* stream = MemoryStream::New(data, size);

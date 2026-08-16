@@ -1,6 +1,11 @@
 #include <Utilities/Memory.h>
 #include <Utilities/StringUtils.h>
 
+#include <climits>
+#include <cstring>
+#include <cmath>
+#include <stdexcept>
+
 char* StringUtils::Create(void* src, size_t length) {
 	char* string = (char*)MEMORY_ALLOC(length + 1);
 	memcpy(string, src, length);

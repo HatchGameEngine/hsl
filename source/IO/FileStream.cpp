@@ -6,6 +6,8 @@
 
 #include <IO/FileStream.h>
 
+#include <new>
+
 FileStream* FileStream::New(const char* filename, const char* access) {
 	// Cannot open file stream if there is a directory with that name.
 #if WIN32

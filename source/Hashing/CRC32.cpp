@@ -1,12 +1,5 @@
 #include <Hashing/CRC32.h>
 
-Uint32 CRC32::EncryptString(char* data) {
-	return CRC32::EncryptData(data, strlen(data));
-}
-Uint32 CRC32::EncryptString(const char* message) {
-	return CRC32::EncryptString((char*)message);
-}
-
 Uint32 CRC32::EncryptData(const void* data, size_t size) {
 	return CRC32::EncryptData(data, size, 0xFFFFFFFFU);
 }

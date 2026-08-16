@@ -21,7 +21,7 @@ extern "C" {
 #include <android/log.h>
 #endif
 
-#include <stdarg.h>
+#include <cstdarg>
 
 #define DEFAULT_LOG_FILENAME TARGET_NAME ".log"
 
