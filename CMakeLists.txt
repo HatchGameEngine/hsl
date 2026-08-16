@@ -114,7 +114,6 @@ set(HSL_MAIN_SOURCES
   source/HSL/ValuePrinter.cpp
   source/Hashing/CombinedHash.cpp
   source/Hashing/CRC32.cpp
-  source/Hashing/FNV1A.cpp
   source/Hashing/MD5.cpp
   source/Hashing/Murmur.cpp
   source/IO/FileStream.cpp

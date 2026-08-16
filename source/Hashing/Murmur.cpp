@@ -1,4 +1,3 @@
-#include <Hashing/FNV1A.h>
 #include <Hashing/Murmur.h>
 
 Uint32 Murmur::EncryptString(char* message) {
