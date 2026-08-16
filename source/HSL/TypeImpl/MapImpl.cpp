@@ -30,8 +30,8 @@ MapImpl::MapImpl(ScriptManager* manager) {
 Obj* MapImpl::Allocate() {
 	ObjMap* map = (ObjMap*)Manager->AllocateObject(sizeof(ObjMap), OBJ_MAP);
 	map->Object.Class = Class;
-	map->Values = new OrderedHashMap<VMValue>(NULL, 4);
-	map->Keys = new OrderedHashMap<VMValue>(NULL, 4);
+	map->Values = new OrderedHashMap<VMValue>(ScriptHash::EncryptData, 4);
+	map->Keys = new OrderedHashMap<VMValue>(ScriptHash::EncryptData, 4);
 	return (Obj*)map;
 }
 

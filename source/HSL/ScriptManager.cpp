@@ -1240,8 +1240,8 @@ ObjClosure* ScriptManager::NewClosure(ObjFunction* function) {
 ObjClass* ScriptManager::NewClass(Uint32 hash) {
 	ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
 	klass->Hash = hash;
-	klass->Methods = new Table(NULL, 4);
-	klass->Fields = new Table(NULL, 16);
+	klass->Methods = new Table(ScriptHash::EncryptData, 4);
+	klass->Fields = new Table(ScriptHash::EncryptData, 16);
 	klass->Initializer = NULL_VAL;
 	klass->Name = StringUtils::Create(GetClassName(hash));
 #ifdef HSL_VM
@@ -1279,7 +1279,7 @@ ObjMap* ScriptManager::NewMap() {
 }
 ObjNamespace* ScriptManager::NewNamespace(Uint32 hash) {
 	ObjNamespace* ns = ALLOCATE_OBJ(ObjNamespace, OBJ_NAMESPACE);
-	ns->Fields = new Table(NULL, 16);
+	ns->Fields = new Table(ScriptHash::EncryptData, 16);
 	ns->Name = StringUtils::Create(GetClassName(hash));
 	return ns;
 }
@@ -1291,7 +1291,7 @@ ObjNamespace* ScriptManager::NewNamespace(const char* nsName) {
 }
 ObjEnum* ScriptManager::NewEnum(Uint32 hash) {
 	ObjEnum* enumeration = ALLOCATE_OBJ(ObjEnum, OBJ_ENUM);
-	enumeration->Fields = new Table(NULL, 16);
+	enumeration->Fields = new Table(ScriptHash::EncryptData, 16);
 	enumeration->Name = StringUtils::Create(GetClassName(hash));
 	return enumeration;
 }
