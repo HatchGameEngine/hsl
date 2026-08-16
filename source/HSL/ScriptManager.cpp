@@ -3,9 +3,10 @@
 #include <HSL/TypeImpl/TypeImpl.h>
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
-#include <Utilities/Log.h>
+#include <Hashing/CRC32.h>
+#include <Hashing/MD5.h>
 #include <IO/FileStream.h>
-#include <Hashing/CombinedHash.h>
+#include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>
 
 #ifdef HSL_VM
@@ -1082,7 +1083,9 @@ Uint32 ScriptManager::MakeFilenameHash(const char* filename) {
 	if (dot) {
 		length = dot - filename;
 	}
-	return CombinedHash::EncryptData((const void*)filename, length);
+
+	Uint8 objMD5[16];
+	return CRC32::EncryptData(MD5::EncryptData(objMD5, (void*)filename, length), 16);
 }
 std::string ScriptManager::GetBytecodeFilenameForHash(Uint32 filenameHash) {
 	char filename[sizeof(OBJECTS_DIR_NAME) + 12];
