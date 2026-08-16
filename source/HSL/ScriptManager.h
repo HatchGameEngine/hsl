@@ -45,10 +45,11 @@ private:
 	HashMap<SourceFile*>* SourceFiles = nullptr;
 
 	static Uint32 GetBranchLimit();
-	void InitThread(VMThread* thread);
 	void LoadSourceCodeLines(SourceFile* sourceFile, char* text);
 	void LoadSourceCodeLines(SourceFile* sourceFile, const char* sourceFilename);
 #endif
+
+	void InitThread(VMThread* thread);
 
 public:
 #ifdef HSL_VM
