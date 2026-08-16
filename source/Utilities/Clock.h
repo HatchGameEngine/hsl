@@ -1,7 +1,7 @@
 #ifndef UTILITIES_CLOCK_H
 #define UTILITIES_CLOCK_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class Clock {
 public:

@@ -1,7 +1,7 @@
 #ifndef HASHMAP_H
 #define HASHMAP_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 #include <functional>
 

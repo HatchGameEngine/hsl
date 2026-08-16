@@ -2,7 +2,7 @@
 #define IO_STREAM_H
 
 #include <Utilities/Memory.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class Stream {
 public:

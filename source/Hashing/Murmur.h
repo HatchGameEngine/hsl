@@ -1,7 +1,7 @@
 #ifndef HASHING_MURMUR_H
 #define HASHING_MURMUR_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class Murmur {
 public:

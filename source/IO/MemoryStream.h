@@ -2,7 +2,7 @@
 #define IO_MEMORYSTREAM_H
 
 #include <IO/Stream.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class MemoryStream : public Stream {
 public:

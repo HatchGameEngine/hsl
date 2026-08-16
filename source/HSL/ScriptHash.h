@@ -1,7 +1,7 @@
 #ifndef HSL_SCRIPTHASH_H
 #define HSL_SCRIPTHASH_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class ScriptHash {
 public:

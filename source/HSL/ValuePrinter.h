@@ -2,7 +2,7 @@
 #define HSL_VALUEPRINTER_H
 
 #include <HSL/Types.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <Utilities/PrintBuffer.h>
 
 class ValuePrinter {

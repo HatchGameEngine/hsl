@@ -4,7 +4,7 @@
 #include <HSL/Version.h>
 #include <HSL/Exceptions/CompilerErrorException.h>
 #include <HSL/Exceptions/ScriptREPLException.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <IO/FileStream.h>
 #include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>

@@ -1,7 +1,7 @@
 #ifndef HASHING_MD5_H
 #define HASHING_MD5_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class MD5 {
 private:

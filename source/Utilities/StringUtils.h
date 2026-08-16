@@ -1,7 +1,7 @@
 #ifndef UTILITIES_STRINGUTILS_H
 #define UTILITIES_STRINGUTILS_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <HSL/Token.h>
 
 #include <string>

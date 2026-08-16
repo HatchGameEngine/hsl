@@ -3,7 +3,7 @@
 
 #include <HSL/Types.h>
 #include <HSL/VMThread.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 #ifdef VM_DEBUG
 #include <HSL/BytecodeDebugger.h>

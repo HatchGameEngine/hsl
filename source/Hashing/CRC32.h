@@ -1,7 +1,7 @@
 #ifndef HASHING_CRC32_H
 #define HASHING_CRC32_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 class CRC32 {
 public:

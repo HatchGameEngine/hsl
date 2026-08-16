@@ -13,7 +13,7 @@
 #include <HSL/VMThread.h>
 #include <HSL/Exceptions/ScriptException.h>
 #include <Includes/HashMap.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <IO/MemoryStream.h>
 #include <IO/Stream.h>
 

@@ -1,7 +1,7 @@
 #ifndef IO_TERMINALINPUT_H
 #define IO_TERMINALINPUT_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <iostream>
 
 #define REPL_TRIM_CHARS " \t\r\v\f"

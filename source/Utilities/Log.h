@@ -1,7 +1,7 @@
 #ifndef UTILITIES_LOG_H
 #define UTILITIES_LOG_H
 
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 
 #include <cstdio>
 

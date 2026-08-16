@@ -4,7 +4,7 @@
 class ScriptManager;
 
 #include <HSL/Types.h>
-#include <Includes/Standard.h>
+#include <Includes/Types.h>
 #include <Utilities/PrintBuffer.h>
 
 class VMThread {
