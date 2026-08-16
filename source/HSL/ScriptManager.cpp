@@ -792,6 +792,8 @@ bool ScriptManager::LoadScript(VMThread* thread, const char* filename) {
 	bool succeeded = LoadScriptFromStream(thread, stream, filename);
 	stream->Close();
 	return succeeded;
+#else
+	return false;
 #endif
 }
 #ifdef HSL_COMPILER
