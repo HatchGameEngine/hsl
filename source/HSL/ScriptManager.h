@@ -195,7 +195,7 @@ public:
 	ObjString* TakeString(char* chars);
 	ObjString* CopyString(const char* chars, size_t length);
 	ObjString* CopyString(const char* chars);
-	ObjString* CopyString(std::string path);
+	ObjString* CopyString(std::string string);
 	ObjString* CopyString(ObjString* string);
 	ObjFunction* NewFunction();
 	ObjNative* NewNative(NativeFn function);

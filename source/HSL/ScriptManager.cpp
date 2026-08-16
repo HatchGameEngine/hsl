@@ -7,6 +7,10 @@
 #include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>
 
+#ifdef HSL_STDLIB
+#include <HSL/StandardLibrary/StandardLibrary.h>
+#endif
+
 #ifdef HSL_VM
 #include <HSL/GarbageCollector.h>
 #endif
@@ -120,10 +124,6 @@ ScriptManager::ScriptManager() {
 }
 void ScriptManager::Init() {
 	TypeImpl::Init();
-
-#ifdef HSL_STDLIB
-	StandardLibrary::Init();
-#endif
 }
 #if defined(HSL_VM) && defined(VM_DEBUG)
 Uint32 ScriptManager::GetBranchLimit() {

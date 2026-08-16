@@ -86,6 +86,9 @@ if(BUILD_LIBHSL)
     target_compile_definitions(libhsl PRIVATE -DHSL_COMPILER)
     target_sources(libhsl PUBLIC ${HSL_COMPILER_SOURCES})
   endif()
+  if(USING_HSL_STANDARD_LIBRARY)
+    target_compile_definitions(libhsl PRIVATE -DHSL_STDLIB)
+  endif()
   if(USING_HSL_VM AND ENABLE_VM_DEBUGGING)
     target_compile_definitions(libhsl PRIVATE -DVM_DEBUG)
   endif()
@@ -103,6 +106,9 @@ set(HSL_MAIN_SOURCES
   source/HSL/ScriptHash.cpp
   source/HSL/ScriptManager.cpp
   source/HSL/ScriptREPL.cpp
+  source/HSL/StandardLibrary/File.cpp
+  source/HSL/StandardLibrary/Number.cpp
+  source/HSL/StandardLibrary/StandardLibrary.cpp
   source/HSL/TypeImpl/ArrayImpl.cpp
   source/HSL/TypeImpl/FunctionImpl.cpp
   source/HSL/TypeImpl/InstanceImpl.cpp
@@ -139,11 +145,7 @@ if(BUILD_HSL_PROGRAM)
 
   option(ENABLE_REPL "Enable REPL" ON)
   option(ENABLE_LOG_FILE "Enable logging output to a file" ON)
-  if(USING_HSL_STANDARD_LIBRARY)
-    option(USING_CLOCK "Build with clock" ON)
-  else()
-    option(USING_CLOCK "Build with clock" OFF)
-  endif()
+  option(USING_CLOCK "Build with clock" OFF)
 
   target_compile_definitions(hsl PRIVATE -DNO_SCRIPT_COMPILING -DTARGET_NAME=\"hsl\")
   if(DEFINED GIT_COMMIT_HASH)
@@ -167,6 +169,9 @@ if(BUILD_HSL_PROGRAM)
   if(USING_HSL_COMPILER)
     target_compile_definitions(hsl PRIVATE -DHSL_COMPILER)
     target_sources(hsl PUBLIC ${HSL_COMPILER_SOURCES})
+  endif()
+  if(USING_HSL_STANDARD_LIBRARY)
+    target_compile_definitions(hsl PRIVATE -DHSL_STDLIB)
   endif()
   if(USING_HSL_VM AND ENABLE_VM_DEBUGGING)
     target_compile_definitions(hsl PRIVATE -DVM_DEBUG)
