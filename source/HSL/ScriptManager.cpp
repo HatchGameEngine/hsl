@@ -70,25 +70,25 @@ void ScriptManager::ResetStack() {
 
 // #region Life Cycle
 ScriptManager::ScriptManager() {
-	Constants = new HashMap<VMValue>(NULL, 8);
+	Constants = new HashMap<VMValue>(ScriptHash::EncryptData, 8);
 
 	Strings = new ankerl::unordered_dense::map<std::string_view, ObjString*>();
 
 #ifdef HSL_VM
-	Globals = new HashMap<VMValue>(NULL, 8);
-	Sources = new HashMap<BytecodeContainer>(NULL, 8);
-	Classes = new HashMap<ObjClass*>(NULL, 8);
-	Modules = new HashMap<ObjModule*>(NULL, 8);
-	Tokens = new HashMap<char*>(NULL, 64);
+	Globals = new HashMap<VMValue>(ScriptHash::EncryptData, 8);
+	Sources = new HashMap<BytecodeContainer>(ScriptHash::EncryptData, 8);
+	Classes = new HashMap<ObjClass*>(ScriptHash::EncryptData, 8);
+	Modules = new HashMap<ObjModule*>(ScriptHash::EncryptData, 8);
+	Tokens = new HashMap<char*>(ScriptHash::EncryptData, 64);
 
 #ifdef VM_DEBUG
-	SourceFiles = new HashMap<SourceFile*>(NULL, 8);
+	SourceFiles = new HashMap<SourceFile*>(ScriptHash::EncryptData, 8);
 #endif
 
 	GC = new GarbageCollector(this);
 #endif
 
-	ImplClasses = new HashMap<ObjClass*>(NULL, 8);
+	ImplClasses = new HashMap<ObjClass*>(ScriptHash::EncryptData, 8);
 
 	ImplArray = new ArrayImpl(this);
 	ImplFunction = new FunctionImpl(this);
@@ -730,7 +730,7 @@ VMValue ScriptManager::FindFunction(const char* functionName) {
 		}
 
 		ObjClass* klass = AS_CLASS(value);
-		Uint32 hash = Murmur::EncryptString(methodName);
+		Uint32 hash = ScriptHash::EncryptString(methodName);
 		if (!GetClassMethod(klass, hash, &callable)) {
 			return NULL_VAL;
 		}
@@ -1174,7 +1174,7 @@ VMValue ScriptManager::VM_HasField(int argCount, VMValue* args, VMThread* thread
 	thread->CheckArgCount(argCount, 2);
 
 	const char* name = thread->GetString(args, 1);
-	Uint32 hash = Murmur::EncryptString(name);
+	Uint32 hash = ScriptHash::EncryptString(name);
 
 	return INTEGER_VAL(thread->HasProperty(args[0], hash));
 }
@@ -1183,7 +1183,7 @@ VMValue ScriptManager::VM_GetField(int argCount, VMValue* args, VMThread* thread
 	thread->CheckArgCount(argCount, 2);
 
 	const char* name = thread->GetString(args, 1);
-	Uint32 hash = Murmur::EncryptString(name);
+	Uint32 hash = ScriptHash::EncryptString(name);
 
 	if (thread->HasProperty(args[0], hash))
 		return thread->GetProperty(args[0], hash);
@@ -1196,7 +1196,7 @@ VMValue ScriptManager::VM_SetField(int argCount, VMValue* args, VMThread* thread
 	thread->CheckArgCount(argCount, 3);
 
 	const char* name = thread->GetString(args, 1);
-	Uint32 hash = Murmur::EncryptString(name);
+	Uint32 hash = ScriptHash::EncryptString(name);
 
 	return thread->SetProperty(args[0], hash, args[2]);;
 }
@@ -1253,7 +1253,7 @@ ObjClass* ScriptManager::NewClass(Uint32 hash) {
 	return klass;
 }
 ObjClass* ScriptManager::NewClass(const char* className) {
-	ObjClass* klass = NewClass(GetClassHash(className));
+	ObjClass* klass = NewClass(ScriptHash::EncryptString(className));
 	klass->Name = (char*)MEMORY_REALLOC(klass->Name, strlen(className) + 1);
 	memcpy(klass->Name, className, strlen(className) + 1);
 	return klass;
@@ -1284,7 +1284,7 @@ ObjNamespace* ScriptManager::NewNamespace(Uint32 hash) {
 	return ns;
 }
 ObjNamespace* ScriptManager::NewNamespace(const char* nsName) {
-	ObjNamespace* ns = NewNamespace(GetClassHash(nsName));
+	ObjNamespace* ns = NewNamespace(ScriptHash::EncryptString(nsName));
 	ns->Name = (char*)MEMORY_REALLOC(ns->Name, strlen(nsName) + 1);
 	memcpy(ns->Name, nsName, strlen(nsName) + 1);
 	return ns;

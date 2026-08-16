@@ -88,6 +88,6 @@ hsl_Result hsl_set_runtime_error_handler(hsl_Context* context, hsl_RuntimeErrorH
 }
 
 Uint32 hsl_get_hash_internal(const char* name) {
-	return Murmur::EncryptString(name);
+	return ScriptHash::EncryptString(name);
 }
 #endif

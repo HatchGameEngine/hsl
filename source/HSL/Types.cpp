@@ -10,10 +10,6 @@
 
 #define GROW_CAPACITY(val) ((val) < 8 ? 8 : val << 1)
 
-Uint32 GetClassHash(const char* name) {
-	return Murmur::EncryptString(name);
-}
-
 const char* GetModuleName(ObjModule* module) {
 	if (module->SourceFilename) {
 		return module->SourceFilename;

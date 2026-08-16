@@ -9,4 +9,4 @@ public:
 	CompilerErrorException(const std::string& message) : std::runtime_error(message) {}
 };
 
-#endif /* EXCEPTIONS_COMPILERERROREXCEPTION_H */
+#endif /* HSL_EXCEPTIONS_COMPILERERROREXCEPTION_H */

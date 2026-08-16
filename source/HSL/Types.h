@@ -1,6 +1,7 @@
 #ifndef HSL_TYPES_H
 #define HSL_TYPES_H
 
+#include <HSL/ScriptHash.h>
 #include <Includes/HashMap.h>
 #include <Includes/OrderedHashMap.h>
 
@@ -473,7 +474,6 @@ struct ObjStream {
 
 #undef UNION_INSTANCEABLE
 
-Uint32 GetClassHash(const char* name);
 const char* GetModuleName(ObjModule* module);
 
 static inline bool IsObjectType(VMValue value, ObjType type) {
@@ -485,7 +485,7 @@ static inline bool IsNativeInstance(Obj* object, const char* className) {
 	}
 
 	ObjClass* klass = object->Class;
-	if (klass != nullptr && klass->Hash == GetClassHash(className)) {
+	if (klass != nullptr && klass->Hash == ScriptHash::EncryptString(className)) {
 		return true;
 	}
 

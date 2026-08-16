@@ -13,4 +13,4 @@ struct Token {
 	std::string ToString() { return std::string(Start, Length); }
 };
 
-#endif
+#endif /* HSL_TOKEN_H */

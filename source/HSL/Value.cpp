@@ -16,12 +16,12 @@ Uint32 Value::Hash(VMValue value) {
 	case VAL_LINKED_DECIMAL:
 		return HashDecimal(AS_DECIMAL(value));
 	case VAL_HITBOX:
-		return Murmur::EncryptData(AS_HITBOX(value), sizeof(Sint16) * NUM_HITBOX_SIDES);
+		return ScriptHash::EncryptData(AS_HITBOX(value), sizeof(Sint16) * NUM_HITBOX_SIDES);
 	case VAL_OBJECT:
 		switch (OBJECT_TYPE(value)) {
 		case OBJ_STRING: {
 			ObjString* str = AS_STRING(value);
-			return Murmur::EncryptData(str->Chars, str->Length);
+			return ScriptHash::EncryptData(str->Chars, str->Length);
 		}
 		default:
 			return (uintptr_t)value.as.Object;
@@ -35,7 +35,7 @@ Uint32 Value::Hash(VMValue value) {
 }
 
 Uint32 Value::HashDecimal(float val) {
-	return Murmur::EncryptData(&val, sizeof(float));
+	return ScriptHash::EncryptData(&val, sizeof(float));
 }
 
 const char* Value::GetObjectTypeName(Uint32 type) {

@@ -3634,10 +3634,10 @@ void Compiler::ResetVariableLocal() {
 	VariableLocal.Constant = false;
 }
 Uint32 Compiler::GetHash(char* string) {
-	return Murmur::EncryptString(string);
+	return ScriptHash::EncryptString(string);
 }
 Uint32 Compiler::GetHash(Token token) {
-	return Murmur::EncryptData(token.Start, token.Length);
+	return ScriptHash::EncryptData(token.Start, token.Length);
 }
 
 Chunk* Compiler::CurrentChunk() {
@@ -4386,7 +4386,7 @@ void Compiler::Init() {
 void Compiler::GetStandardConstants(ScriptManager* manager) {
 	if (Compiler::StandardConstants == NULL) {
 		Compiler::StandardConstants =
-			new HashMap<VMValue>(NULL, manager->Constants->Count());
+			new HashMap<VMValue>(ScriptHash::EncryptData, manager->Constants->Count());
 	}
 	Compiler::StandardConstants->Clear();
 
@@ -4398,7 +4398,7 @@ void Compiler::GetStandardConstants(ScriptManager* manager) {
 }
 void Compiler::PrepareCompiling() {
 	if (Compiler::TokenMap == NULL) {
-		Compiler::TokenMap = new HashMap<Token>(NULL, 8);
+		Compiler::TokenMap = new HashMap<Token>(ScriptHash::EncryptData, 8);
 	}
 }
 void Compiler::Initialize(char* name) {
@@ -4550,7 +4550,7 @@ bool Compiler::Compile(const char* filename, const char* source, Stream* output)
 		debugger->PrintToLog = CurrentSettings.PrintToLog;
 
 		if (TokenMap && TokenMap->Count()) {
-			HashMap<char*>* tokens = new HashMap<char*>(NULL, TokenMap->Count());
+			HashMap<char*>* tokens = new HashMap<char*>(ScriptHash::EncryptData, TokenMap->Count());
 
 			TokenMap->WithAll([tokens](Uint32 hash, Token token) -> void {
 				std::string asString = token.ToString();

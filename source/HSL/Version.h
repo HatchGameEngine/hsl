@@ -3,4 +3,4 @@
 
 #define HSL_VERSION "1.4.0"
 
-#endif
+#endif /* HSL_VERSION_H */

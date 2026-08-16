@@ -100,6 +100,7 @@ endif()
 set(HSL_MAIN_SOURCES
   source/HSL/Bytecode.cpp
   source/HSL/BytecodeDebugger.cpp
+  source/HSL/ScriptHash.cpp
   source/HSL/ScriptManager.cpp
   source/HSL/ScriptREPL.cpp
   source/HSL/TypeImpl/ArrayImpl.cpp

@@ -1,8 +1,8 @@
 #ifndef HASHMAP_H
 #define HASHMAP_H
 
-#include <Hashing/Murmur.h>
 #include <Includes/Standard.h>
+
 #include <functional>
 
 #ifndef USE_STD_UNORDERED_MAP
@@ -22,9 +22,6 @@ public:
 
 	HashMap<T>(Uint32 (*hashFunc)(const void*, size_t) = nullptr, int capacity = 16) {
 		HashFunction = hashFunc;
-		if (HashFunction == nullptr) {
-			HashFunction = Murmur::EncryptData;
-		}
 	}
 
 	size_t Count() { return Data.size(); }

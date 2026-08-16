@@ -9,4 +9,4 @@ public:
 	ScriptException(const std::string& message) : std::runtime_error(message) {}
 };
 
-#endif /* EXCEPTIONS_SCRIPTEXCEPTION_H */
+#endif /* HSL_EXCEPTIONS_SCRIPTEXCEPTION_H */

@@ -151,7 +151,7 @@ bool Bytecode::Read(Stream* stream, ScriptManager* manager, HashMap<char*>* toke
 		if (tokens) {
 			for (int t = 0; t < tokenCount; t++) {
 				char* string = stream->ReadString();
-				Uint32 hash = Murmur::EncryptString(string);
+				Uint32 hash = ScriptHash::EncryptString(string);
 				if (!tokens->Exists(hash)) {
 					tokens->Put(hash, string);
 				}
@@ -377,7 +377,7 @@ void Bytecode::WriteChunk(Stream* stream, ObjFunction* function) {
 		stream->WriteUInt32(chunk->OpcodeCount);
 	}
 
-	stream->WriteUInt32(Murmur::EncryptString(function->Name));
+	stream->WriteUInt32(ScriptHash::EncryptString(function->Name));
 
 	stream->WriteBytes(chunk->Code, chunk->Count);
 	if (HasDebugInfo) {
