@@ -22,13 +22,8 @@ hsl_Module* hsl_load_script(hsl_Context* context, const char* code, hsl_Compiler
 		return nullptr;
 	}
 
-	Uint32 filenameHash = 0xABCDABCD;
-	if (input_filename) {
-		filenameHash = ScriptManager::MakeFilenameHash(input_filename);
-	}
-
 	memStream->Seek(0);
-	loadedModule = compilerPtr->Manager->LoadBytecode(memStream, filenameHash);
+	loadedModule = compilerPtr->Manager->LoadBytecode(memStream, input_filename);
 	memStream->Close();
 
 	hsl_compiler_free(compiler);
@@ -42,17 +37,12 @@ hsl_Module* hsl_load_bytecode(hsl_Context* context, char* code, size_t size, con
 		return nullptr;
 	}
 
-	Uint32 filenameHash = 0xABCDABCD;
-	if (input_filename) {
-		filenameHash = ScriptManager::MakeFilenameHash(input_filename);
-	}
-
 	MemoryStream* memStream = MemoryStream::New(code, size);
 	if (!memStream) {
 		return nullptr;
 	}
 
-	ObjModule* loadedModule = manager->LoadBytecode(memStream, filenameHash);
+	ObjModule* loadedModule = manager->LoadBytecode(memStream, input_filename);
 	memStream->Close();
 
 	return (hsl_Module*)loadedModule;

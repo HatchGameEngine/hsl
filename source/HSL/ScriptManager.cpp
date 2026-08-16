@@ -3,8 +3,6 @@
 #include <HSL/TypeImpl/TypeImpl.h>
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
-#include <Hashing/CRC32.h>
-#include <Hashing/MD5.h>
 #include <IO/FileStream.h>
 #include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>
@@ -589,7 +587,7 @@ Bytecode* ScriptManager::ReadBytecode(Stream *stream) {
 
 	return bytecode;
 }
-ObjModule* ScriptManager::LoadBytecode(Bytecode* bytecode, Uint32 filenameHash) {
+ObjModule* ScriptManager::LoadBytecode(Bytecode* bytecode, const char* filename) {
 	ObjModule* module = NewModule();
 
 	for (size_t i = 0; i < bytecode->Functions.size(); i++) {
@@ -608,49 +606,45 @@ ObjModule* ScriptManager::LoadBytecode(Bytecode* bytecode, Uint32 filenameHash) 
 		module->SourceFilename = StringUtils::Duplicate(bytecode->SourceFilename);
 		module->HasSourceFilename = true;
 	}
-	else if (filenameHash) {
-		char fnHash[13];
-		snprintf(fnHash, sizeof(fnHash), "%08X.ibc", filenameHash);
-		module->SourceFilename = StringUtils::Duplicate(fnHash);
+	else if (filename) {
+		module->SourceFilename = StringUtils::Duplicate(filename);
 		module->HasSourceFilename = false;
-	}
 
-	ModuleList.push_back(module);
-
-	if (filenameHash) {
-		Modules->Put(filenameHash, module);
+		Modules->Put(filename, module);
 	}
 	else {
 		TempModuleList.push_back(module);
 	}
 
+	ModuleList.push_back(module);
+
 	return module;
 }
-ObjModule* ScriptManager::LoadBytecode(BytecodeContainer bytecodeContainer, Uint32 filenameHash) {
+ObjModule* ScriptManager::LoadBytecode(BytecodeContainer bytecodeContainer, const char* filename) {
 	Bytecode* bytecode = ReadBytecode(bytecodeContainer);
 	if (bytecode) {
-		ObjModule* module = LoadBytecode(bytecode, filenameHash);
+		ObjModule* module = LoadBytecode(bytecode, filename);
 		delete bytecode;
 		return module;
 	}
 	return nullptr;
 }
-ObjModule* ScriptManager::LoadBytecode(Stream* stream, Uint32 filenameHash) {
+ObjModule* ScriptManager::LoadBytecode(Stream* stream, const char* filename) {
 	Bytecode* bytecode = ReadBytecode(stream);
 	if (bytecode) {
-		ObjModule* module = LoadBytecode(bytecode, filenameHash);
+		ObjModule* module = LoadBytecode(bytecode, filename);
 		delete bytecode;
 		return module;
 	}
 	return nullptr;
 }
-bool ScriptManager::RunBytecode(VMThread* thread, BytecodeContainer bytecodeContainer, Uint32 filenameHash) {
+bool ScriptManager::RunBytecode(VMThread* thread, BytecodeContainer bytecodeContainer, const char* filename) {
 	Bytecode* bytecode = ReadBytecode(bytecodeContainer);
 	if (!bytecode) {
 		return false;
 	}
 
-	ObjModule* module = LoadBytecode(bytecode, filenameHash);
+	ObjModule* module = LoadBytecode(bytecode, filename);
 
 	delete bytecode;
 
@@ -668,13 +662,13 @@ bool ScriptManager::RunBytecode(VMThread* thread, BytecodeContainer bytecodeCont
 
 	return true;
 }
-bool ScriptManager::RunBytecode(VMThread* thread, Stream* stream, Uint32 filenameHash) {
+bool ScriptManager::RunBytecode(VMThread* thread, Stream* stream, const char* filename) {
 	Bytecode* bytecode = ReadBytecode(stream);
 	if (!bytecode) {
 		return false;
 	}
 
-	ObjModule* module = LoadBytecode(bytecode, filenameHash);
+	ObjModule* module = LoadBytecode(bytecode, filename);
 
 	delete bytecode;
 
@@ -877,14 +871,9 @@ ObjModule* ScriptManager::CompileAndLoad(VMThread* thread, Compiler* compiler, c
 	ObjModule* module = nullptr;
 
 	if (didCompile) {
-		Uint32 filenameHash = 0x00000000;
-		if (filename) {
-			filenameHash = MakeFilenameHash(filename);
-		}
-
 		memStream->Seek(0);
 
-		module = LoadBytecode(memStream, filenameHash);
+		module = LoadBytecode(memStream, filename);
 
 #ifdef VM_DEBUG
 		if (module && BreakpointsEnabled) {
@@ -899,19 +888,11 @@ ObjModule* ScriptManager::CompileAndLoad(VMThread* thread, Compiler* compiler, c
 }
 #endif
 bool ScriptManager::IsScriptLoaded(const char* filename) {
-	Uint32 hash = MakeFilenameHash(filename);
-	return IsScriptLoaded(hash);
-}
-bool ScriptManager::IsScriptLoaded(Uint32 filenameHash) {
-	return Sources->Exists(filenameHash);
+	return Sources->Exists(filename);
 }
 ObjModule* ScriptManager::GetScriptModule(const char* filename) {
-	Uint32 hash = MakeFilenameHash(filename);
-	return GetScriptModule(hash);
-}
-ObjModule* ScriptManager::GetScriptModule(Uint32 filenameHash) {
-	if (Modules->Exists(filenameHash)) {
-		return Modules->Get(filenameHash);
+	if (Modules->Exists(filename)) {
+		return Modules->Get(filename);
 	}
 	return nullptr;
 }
@@ -1077,21 +1058,6 @@ void ScriptManager::RemoveSourceFile(const char* sourceFilename) {
 }
 #endif
 #endif
-Uint32 ScriptManager::MakeFilenameHash(const char* filename) {
-	size_t length = strlen(filename);
-	const char* dot = strrchr(filename, '.');
-	if (dot) {
-		length = dot - filename;
-	}
-
-	Uint8 objMD5[16];
-	return CRC32::EncryptData(MD5::EncryptData(objMD5, (void*)filename, length), 16);
-}
-std::string ScriptManager::GetBytecodeFilenameForHash(Uint32 filenameHash) {
-	char filename[sizeof(OBJECTS_DIR_NAME) + 12];
-	snprintf(filename, sizeof filename, "%s%08X.ibc", OBJECTS_DIR_NAME, filenameHash);
-	return std::string(filename);
-}
 // #endregion
 
 #define ALLOCATE_OBJ(type, objectType) (type*)AllocateObject(sizeof(type), objectType)

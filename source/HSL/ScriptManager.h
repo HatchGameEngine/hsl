@@ -129,11 +129,11 @@ public:
 #ifdef HSL_VM
 	Bytecode* ReadBytecode(BytecodeContainer bytecodeContainer);
 	Bytecode* ReadBytecode(Stream* stream);
-	ObjModule* LoadBytecode(Bytecode* bytecode, Uint32 filenameHash);
-	ObjModule* LoadBytecode(BytecodeContainer bytecodeContainer, Uint32 filenameHash);
-	ObjModule* LoadBytecode(Stream* stream, Uint32 filenameHash);
-	bool RunBytecode(VMThread* thread, BytecodeContainer bytecodeContainer, Uint32 filenameHash);
-	bool RunBytecode(VMThread* thread, Stream* stream, Uint32 filenameHash);
+	ObjModule* LoadBytecode(Bytecode* bytecode, const char* filename);
+	ObjModule* LoadBytecode(BytecodeContainer bytecodeContainer, const char* filename);
+	ObjModule* LoadBytecode(Stream* stream, const char* filename);
+	bool RunBytecode(VMThread* thread, BytecodeContainer bytecodeContainer, const char* filename);
+	bool RunBytecode(VMThread* thread, Stream* stream, const char* filename);
 #ifdef VM_DEBUG
 	void AddModuleBreakpoints(VMThread* thread, ObjModule* module);
 #endif
@@ -152,9 +152,7 @@ public:
 	ObjModule* CompileAndLoad(VMThread* thread, Compiler* compiler, const char* code, const char* filename);
 #endif
 	bool IsScriptLoaded(const char* filename);
-	bool IsScriptLoaded(Uint32 filenameHash);
 	ObjModule* GetScriptModule(const char* filename);
-	ObjModule* GetScriptModule(Uint32 filenameHash);
 	ObjFunction* GetFunctionAtScriptLine(ObjModule* module, int lineNum);
 #ifdef HSL_LIBRARY
 	void SetImportScriptHandler(hsl_ImportScriptHandler handler);
@@ -170,8 +168,6 @@ public:
 	void RemoveSourceFile(const char* sourceFilename);
 #endif
 #endif
-	static Uint32 MakeFilenameHash(const char* filename);
-	static std::string GetBytecodeFilenameForHash(Uint32 filenameHash);
 #ifdef HSL_VM
 	int GetInteger(VMValue* args, int index, VMThread* thread);
 	float GetDecimal(VMValue* args, int index, VMThread* thread);

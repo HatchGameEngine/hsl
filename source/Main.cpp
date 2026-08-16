@@ -16,6 +16,8 @@
 #endif
 
 #ifdef HSL_COMPILER
+#include <Hashing/CRC32.h>
+#include <Hashing/MD5.h>
 #include <HSL/Compiler.h>
 #else
 #undef HSL_STANDALONE_REPL
@@ -243,15 +245,7 @@ bool RunnerMain(const char* filename) {
 	if (isBytecode)
 #endif
 	{
-		Uint32 hash = 0xABCDABCD;
-
-		Uint32 hashFromFilename = 0x00000000;
-		sscanf(filename, "%08X", &hashFromFilename);
-		if (hashFromFilename != 0x00000000) {
-			hash = hashFromFilename;
-		}
-
-		module = GlobalScriptManager->LoadBytecode(stream, hash);
+		module = GlobalScriptManager->LoadBytecode(stream, filename);
 	}
 #ifdef HSL_COMPILER
 	else {
@@ -314,6 +308,17 @@ bool RunnerMain(const char* filename) {
 #endif
 
 #ifdef HSL_COMPILER
+Uint32 MakeFilenameHash(const char* filename) {
+	size_t length = strlen(filename);
+	const char* dot = strrchr(filename, '.');
+	if (dot) {
+		length = dot - filename;
+	}
+
+	Uint8 objMD5[16];
+	return CRC32::EncryptData(MD5::EncryptData(objMD5, (void*)filename, length), 16);
+}
+
 bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 	Stream* stream = FileStream::New(inputFilename, "rb");
 	if (!stream) {
@@ -368,7 +373,7 @@ bool CompilerMain(const char* inputFilename, const char* outputFilename) {
 
 	if (outputFilename == nullptr) {
 		static char filenameBuffer[13];
-		Uint32 filenameHash = GlobalScriptManager->MakeFilenameHash(SourceFilename);
+		Uint32 filenameHash = MakeFilenameHash(SourceFilename);
 		snprintf(filenameBuffer, sizeof filenameBuffer, "%08X.ibc", filenameHash);
 		outputFilename = filenameBuffer;
 	}
