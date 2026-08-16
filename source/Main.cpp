@@ -1,10 +1,10 @@
 #include <HSL/BytecodeDebugger.h>
 #include <HSL/CompilerEnums.h>
 #include <HSL/ScriptManager.h>
-#include <Exceptions/CompilerErrorException.h>
-#include <Exceptions/ScriptREPLException.h>
+#include <HSL/Version.h>
+#include <HSL/Exceptions/CompilerErrorException.h>
+#include <HSL/Exceptions/ScriptREPLException.h>
 #include <Includes/Standard.h>
-#include <Includes/Version.h>
 #include <IO/FileStream.h>
 #include <Utilities/Log.h>
 #include <Utilities/StringUtils.h>

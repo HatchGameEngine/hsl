@@ -5,7 +5,7 @@
 #include <HSL/ScriptManager.h>
 #include <HSL/Value.h>
 #include <Utilities/Log.h>
-#include <Exceptions/CompilerErrorException.h>
+#include <HSL/Exceptions/CompilerErrorException.h>
 #include <Utilities/StringUtils.h>
 
 #include <cmath>

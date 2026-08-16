@@ -13,7 +13,7 @@
 
 #ifdef HSL_COMPILER
 #include <HSL/Compiler.h>
-#include <Exceptions/CompilerErrorException.h>
+#include <HSL/Exceptions/CompilerErrorException.h>
 #endif
 
 #include <Main.h>

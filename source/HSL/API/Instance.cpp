@@ -2,7 +2,7 @@
 #include <HSL/API.h>
 #include <HSL/ScriptManager.h>
 #include <HSL/VMThread.h>
-#include <Exceptions/ScriptException.h>
+#include <HSL/Exceptions/ScriptException.h>
 
 Obj* hsl_instance_new_internal(VMThread* vmThread, ObjClass* classObj) {
 	if (classObj->NewFn) {

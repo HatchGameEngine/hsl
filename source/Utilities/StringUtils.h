@@ -2,7 +2,7 @@
 #define UTILITIES_STRINGUTILS_H
 
 #include <Includes/Standard.h>
-#include <Includes/Token.h>
+#include <HSL/Token.h>
 
 #include <string>
 #include <vector>

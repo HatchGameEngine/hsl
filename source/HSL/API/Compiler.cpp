@@ -2,7 +2,7 @@
 #include <HSL/API.h>
 #include <HSL/Compiler.h>
 #include <HSL/ScriptManager.h>
-#include <Exceptions/CompilerErrorException.h>
+#include <HSL/Exceptions/CompilerErrorException.h>
 #include <IO/MemoryStream.h>
 #include <Utilities/StringUtils.h>
 

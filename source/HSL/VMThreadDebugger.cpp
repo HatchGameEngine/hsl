@@ -6,7 +6,7 @@
 #include <HSL/ScriptREPL.h>
 #include <HSL/Value.h>
 #include <HSL/ValuePrinter.h>
-#include <Exceptions/ScriptREPLException.h>
+#include <HSL/Exceptions/ScriptREPLException.h>
 #include <IO/TerminalInput.h>
 #include <Utilities/StringUtils.h>
 

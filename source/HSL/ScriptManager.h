@@ -11,7 +11,7 @@
 #include <HSL/TypeImpl/StreamImpl.h>
 #include <HSL/TypeImpl/StringImpl.h>
 #include <HSL/VMThread.h>
-#include <Exceptions/ScriptException.h>
+#include <HSL/Exceptions/ScriptException.h>
 #include <Includes/HashMap.h>
 #include <Includes/Standard.h>
 #include <IO/MemoryStream.h>

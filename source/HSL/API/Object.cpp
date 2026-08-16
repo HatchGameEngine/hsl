@@ -3,7 +3,7 @@
 #include <HSL/ScriptManager.h>
 #include <HSL/Value.h>
 #include <HSL/VMThread.h>
-#include <Exceptions/ScriptException.h>
+#include <HSL/Exceptions/ScriptException.h>
 
 hsl_Object* hsl_object_get_class(hsl_Object* object) {
 	if (!object) {

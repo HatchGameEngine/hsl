@@ -1,11 +1,11 @@
 #include <HSL/ScriptManager.h>
 #include <HSL/ScriptREPL.h>
 #include <HSL/VMThread.h>
-#include <Exceptions/ScriptREPLException.h>
+#include <HSL/Exceptions/ScriptREPLException.h>
 
 #ifdef HSL_COMPILER
 #include <HSL/Compiler.h>
-#include <Exceptions/CompilerErrorException.h>
+#include <HSL/Exceptions/CompilerErrorException.h>
 #include <Utilities/StringUtils.h>
 #endif
 

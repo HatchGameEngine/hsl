@@ -2,7 +2,7 @@
 #define COMPILER_ENUMS
 
 #include <HSL/Types.h>
-#include <Includes/Token.h>
+#include <HSL/Token.h>
 
 struct CompilerSettings {
 	bool PrintToLog;
