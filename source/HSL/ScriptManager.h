@@ -3,6 +3,8 @@
 
 #include <HSL/Bytecode.h>
 #include <HSL/GarbageCollector.h>
+#include <HSL/Exceptions/ScriptException.h>
+#include <HSL/HashMap.h>
 #include <HSL/Types.h>
 #include <HSL/TypeImpl/ArrayImpl.h>
 #include <HSL/TypeImpl/FunctionImpl.h>
@@ -11,8 +13,6 @@
 #include <HSL/TypeImpl/StreamImpl.h>
 #include <HSL/TypeImpl/StringImpl.h>
 #include <HSL/VMThread.h>
-#include <HSL/Exceptions/ScriptException.h>
-#include <Includes/HashMap.h>
 #include <Includes/Types.h>
 #include <IO/MemoryStream.h>
 #include <IO/Stream.h>

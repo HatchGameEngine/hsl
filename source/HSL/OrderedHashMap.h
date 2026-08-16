@@ -1,7 +1,7 @@
 #ifndef ORDEREDHASHMAP_H
 #define ORDEREDHASHMAP_H
 
-#include <Includes/HashMap.h>
+#include <HSL/HashMap.h>
 
 #include <algorithm>
 #include <functional>

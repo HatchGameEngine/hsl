@@ -1,9 +1,9 @@
 #ifndef HSL_TYPES_H
 #define HSL_TYPES_H
 
+#include <HSL/HashMap.h>
 #include <HSL/ScriptHash.h>
-#include <Includes/HashMap.h>
-#include <Includes/OrderedHashMap.h>
+#include <HSL/OrderedHashMap.h>
 
 #include <IO/Stream.h>
 

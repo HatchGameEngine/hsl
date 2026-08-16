@@ -1,8 +1,8 @@
 #include <HSL/GarbageCollector.h>
 
 #include <HSL/ScriptManager.h>
+#include <HSL/HashMap.h>
 #include <Utilities/Log.h>
-#include <Includes/HashMap.h>
 
 #ifdef USE_CLOCK
 #include <Utilities/Clock.h>

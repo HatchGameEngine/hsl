@@ -2,8 +2,8 @@
 #define HSL_BYTECODEDEBUGGER_H
 
 #include <HSL/CompilerEnums.h>
+#include <HSL/HashMap.h>
 #include <HSL/Types.h>
-#include <Includes/HashMap.h>
 
 class BytecodeDebugger {
 public:
