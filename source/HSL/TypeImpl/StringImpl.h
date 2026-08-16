@@ -16,7 +16,25 @@ public:
 
 #ifdef HSL_VM
 	static bool VM_ElementGet(Obj* object, VMValue at, VMValue* result, VMThread* thread);
-	static bool VM_ElementSet(Obj* object, VMValue at, VMValue value, VMThread* thread);
+
+#ifdef HAVE_NANOPRINTF
+	static VMValue VM_Format(int argCount, VMValue* args, VMThread* thread);
+#endif
+	static VMValue VM_Split(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_CharAt(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_CodepointAt(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_Length(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_Compare(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_IndexOf(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_Contains(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_Substring(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_ToUpperCase(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_ToLowerCase(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_LastIndexOf(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_ParseInteger(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_ParseDecimal(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_GetCodepoints(int argCount, VMValue* args, VMThread* thread);
+	static VMValue VM_FromCodepoints(int argCount, VMValue* args, VMThread* thread);
 #endif
 };
 

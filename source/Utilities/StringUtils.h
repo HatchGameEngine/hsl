@@ -20,7 +20,10 @@ public:
 	static bool ToNumber(int* dst, const char* src);
 	static bool ToDecimal(double* dst, const char* src);
 
+	static int DecodeUTF8Char(const char* chr, int& numBytes);
+	static std::vector<Uint32> GetCodepoints(const char* text);
 	static std::string FromCodepoint(Uint32 codepoint);
+	static std::string FromCodepoints(std::vector<Uint32> codepoints);
 };
 
 #endif /* UTILITIES_STRINGUTILS_H */

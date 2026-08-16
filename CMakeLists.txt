@@ -42,6 +42,7 @@ option(BUILD_HSLC_PROGRAM "Build hslc program" ON)
 option(BUILD_LIBHSL "Build libhsl" ON)
 
 option(ENABLE_USING_LINENOISE "Use linenoise-ng for the CLI" ON)
+option(ENABLE_HAVE_NANOPRINTF "Build with nanoprintf" ON)
 
 # HSL library
 if(BUILD_LIBHSL)
@@ -90,6 +91,9 @@ if(BUILD_LIBHSL)
   endif()
   if(USING_HSL_VM AND ENABLE_USING_VM_FUNCPTRS)
     target_compile_definitions(libhsl PRIVATE -DUSING_VM_FUNCPTRS)
+  endif()
+  if(ENABLE_HAVE_NANOPRINTF)
+    target_compile_definitions(libhsl PRIVATE -DHAVE_NANOPRINTF)
   endif()
 endif()
 
@@ -182,6 +186,9 @@ if(BUILD_HSL_PROGRAM)
       third_party/linenoise-ng/wcwidth.cpp
     )
     target_compile_definitions(hsl PRIVATE -DUSING_LINENOISE)
+  endif()
+  if(ENABLE_HAVE_NANOPRINTF)
+    target_compile_definitions(hsl PRIVATE -DHAVE_NANOPRINTF)
   endif()
   if(ENABLE_REPL)
     target_compile_definitions(hsl PRIVATE -DHSL_STANDALONE_REPL)

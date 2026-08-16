@@ -116,6 +116,101 @@ bool StringUtils::WildcardMatch(const char* first, const char* second) {
 	return false;
 }
 
+int StringUtils::DecodeUTF8Char(const char* chr, int& numBytes) {
+	numBytes = 1;
+
+	if (!chr) {
+		return 0;
+	}
+
+	unsigned char c = *chr;
+	if (c <= 0x7F) {
+		return c;
+	}
+
+	if ((c & 0xE0) == 0xC0) {
+		numBytes = 2;
+
+		if ((chr[1] & 0xC0) != 0x80) {
+			return -1;
+		}
+
+		int decoded = (chr[0] & 0x1F) << 6;
+		decoded |= chr[1] & 0x3F;
+
+		if (decoded < 0x80) {
+			return -1;
+		}
+
+		return decoded;
+	}
+	else if ((c & 0xF0) == 0xE0) {
+		numBytes = 3;
+
+		if ((chr[1] & 0xC0) != 0x80) {
+			return -1;
+		}
+		else if ((chr[2] & 0xC0) != 0x80) {
+			return -1;
+		}
+
+		int decoded = (chr[0] & 0x0F) << 12;
+		decoded |= (chr[1] & 0x3F) << 6;
+		decoded |= chr[2] & 0x3F;
+
+		if (decoded < 0x800 || (decoded >= 0xD800 && decoded <= 0xDFFF)) {
+			return -1;
+		}
+
+		return decoded;
+	}
+	else if ((c & 0xF8) == 0xF0) {
+		numBytes = 4;
+
+		if ((chr[1] & 0xC0) != 0x80) {
+			return -1;
+		}
+		else if ((chr[2] & 0xC0) != 0x80) {
+			return -1;
+		}
+		else if ((chr[3] & 0xC0) != 0x80) {
+			return -1;
+		}
+
+		int decoded = (chr[0] & 0x07) << 18;
+		decoded |= (chr[1] & 0x3F) << 12;
+		decoded |= (chr[2] & 0x3F) << 6;
+		decoded |= chr[3] & 0x3F;
+
+		if (decoded < 0x10000 || decoded > 0x10FFFF) {
+			return -1;
+		}
+
+		return decoded;
+	}
+
+	return -1;
+}
+
+// Handles UTF-8 text and obtains UCS codepoints
+std::vector<Uint32> StringUtils::GetCodepoints(const char* text) {
+	size_t textLength = strlen(text);
+
+	std::vector<Uint32> codepoints;
+	codepoints.reserve(textLength);
+
+	for (size_t i = 0; i < textLength;) {
+		int numBytes = 1;
+		int decoded = StringUtils::DecodeUTF8Char(&text[i], numBytes);
+
+		codepoints.push_back((Uint32)decoded);
+
+		i += numBytes;
+	}
+
+	return codepoints;
+}
+
 // Converts an UCS codepoint to an UTF-8 string
 // Throws an exception if it encounters an invalid codepoint.
 std::string StringUtils::FromCodepoint(Uint32 codepoint) {
@@ -142,6 +237,21 @@ std::string StringUtils::FromCodepoint(Uint32 codepoint) {
 	}
 	else {
 		throw std::runtime_error("Invalid UCS codepoint encountered!");
+	}
+
+	return result;
+}
+
+// Returns UTF-8 text from UCS codepoints
+// Throws an exception if it encounters an invalid codepoint.
+std::string StringUtils::FromCodepoints(std::vector<Uint32> codepoints) {
+	size_t numCodepoints = codepoints.size();
+
+	std::string result;
+	result.reserve(numCodepoints * 2);
+
+	for (size_t i = 0; i < numCodepoints; i++) {
+		result += StringUtils::FromCodepoint(codepoints[i]);
 	}
 
 	return result;
