@@ -6,13 +6,6 @@
 
 class Stream {
 public:
-	// This abstraction makes reading and writing separate properties
-	// since a stream may or may not be bidirectional.
-	// Appending is a special case for file streams and was not considered here.
-	virtual bool IsReadable();
-	virtual bool IsWritable();
-	virtual bool MakeReadable(bool readable);
-	virtual bool MakeWritable(bool writable);
 	virtual void Close();
 	virtual void Seek(Sint64 offset);
 	virtual void SeekEnd(Sint64 offset);

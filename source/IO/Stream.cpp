@@ -9,19 +9,6 @@
 	type data = {}; \
 	ReadBytes(&data, sizeof(data));
 
-bool Stream::IsReadable() {
-	return false;
-}
-bool Stream::IsWritable() {
-	return false;
-}
-bool Stream::MakeReadable(bool readable) {
-	return false;
-}
-bool Stream::MakeWritable(bool writable) {
-	return false;
-}
-
 void Stream::Close() {
 	delete this;
 }

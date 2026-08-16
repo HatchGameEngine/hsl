@@ -5,9 +5,6 @@
 #include <Includes/Standard.h>
 
 class MemoryStream : public Stream {
-private:
-	bool Writable = true;
-
 public:
 	Uint8* pointer = NULL;
 	Uint8* pointer_start = NULL;
@@ -15,12 +12,7 @@ public:
 	bool owns_memory = false;
 
 	static MemoryStream* New(size_t size);
-	static MemoryStream* New(Stream* other);
 	static MemoryStream* New(void* data, size_t size);
-	bool IsReadable();
-	bool IsWritable();
-	bool MakeReadable(bool readable);
-	bool MakeWritable(bool writable);
 	void Close();
 	void Seek(Sint64 offset);
 	void SeekEnd(Sint64 offset);

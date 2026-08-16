@@ -15,14 +15,6 @@ MemoryStream* MemoryStream::New(size_t size) {
 	}
 	return stream;
 }
-MemoryStream* MemoryStream::New(Stream* other) {
-	MemoryStream* stream = MemoryStream::New(other->Length());
-	if (stream) {
-		other->CopyTo(stream);
-		stream->Seek(0);
-	}
-	return stream;
-}
 MemoryStream* MemoryStream::New(void* data, size_t size) {
 	MemoryStream* stream = nullptr;
 	if (!data) {
@@ -39,21 +31,6 @@ MemoryStream* MemoryStream::New(void* data, size_t size) {
 	stream->size = size;
 
 	return stream;
-}
-
-bool MemoryStream::IsReadable() {
-	return true;
-}
-bool MemoryStream::IsWritable() {
-	return Writable;
-}
-bool MemoryStream::MakeReadable(bool readable) {
-	return true;
-}
-bool MemoryStream::MakeWritable(bool writable) {
-	Writable = writable;
-
-	return true;
 }
 
 void MemoryStream::Close() {
@@ -119,7 +96,6 @@ Uint32 MemoryStream::ReadCompressed(void* out, size_t outSz) {
 }
 
 size_t MemoryStream::WriteBytes(void* data, size_t n) {
-	// For speed, this doesn't check IsWritable().
 	size_t pos = Position();
 	if (pos + n > size) {
 		size = pos + n;
